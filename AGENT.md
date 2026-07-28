@@ -10,9 +10,6 @@
 - Lint: `golangci-lint run -v` or `make lint`
 - Format: `go fmt ./...`
 
-IMPORTANT: To run a server and do some interaction with it, use tmux, this makes it very easy to kill a server.
-Use capture-pane to read the output.
-
 ## Project Structure
 
 - `cmd/`: CLI commands and entry points
@@ -24,8 +21,8 @@ Use capture-pane to read the output.
 <runningProcessesGuidelines>
 - When testing TUIs, use tmux and capture-pane to interact with the UI.
 - When using tmux, try to batch as many commands as possible when using send-keys.
-- When running long-running processes (servers, etc...), use tmux to more easily interact and kill them.
-- Kill a process using port $PORT: `lsof-who -p $PORT -k`. When building a web server, ALWAYS use this command to kill the process.
+- When running long-running processes (servers, etc...), use devctl.
+- Kill a process using port $PORT: `listen-killer kill --port XXX --yes` (use `listen-killer list --port XXX` or just `listen-killer help --all`)
 </runningProcessesGuidelines>
 
 <goGuidelines>
