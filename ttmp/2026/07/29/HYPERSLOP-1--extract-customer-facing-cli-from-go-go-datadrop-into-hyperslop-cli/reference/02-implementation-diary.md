@@ -1013,6 +1013,7 @@ The remaining changes make side-effecting numeric bounds explicit, preserve lite
 
 ### What didn't work
 - The first transactional publisher used a named return for deferred rollback and lint rejected it exactly: `pkg/cli/dataset/get.go:351:1: named return "retErr" with type "error" found (nonamedreturns)`. Replaced it with an explicit `committed` flag and reran the complete hyperslop validation.
+- Remote CI then failed its logcopter check because the fifth-pass new `pkg/jsondoc` package had no generated logger artifact. Exact failure: `logcopter-gen: generated file is not current: /home/runner/work/hyperslop-cli/hyperslop-cli/pkg/jsondoc/logcopter.go`. Ran `make logcopter-generate` and `make logcopter-check`; the generated file is committed with this documentation follow-up.
 
 ### What I learned
 - A staged file is only a safe transaction boundary if publication can restore every pre-existing target after any later promotion failure.
