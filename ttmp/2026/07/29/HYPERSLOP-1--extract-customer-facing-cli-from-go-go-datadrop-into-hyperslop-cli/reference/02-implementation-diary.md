@@ -326,3 +326,38 @@ untracked generated pkg/doc/logcopter.go (logcopter-check now passes).
   datadrop smoke tests (which use the same command code), and verify the
   hyperslop binary's own wiring (whoami/device/exit-codes) against the real
   server without a token.
+
+## Step 8: Phase 9 — Release (locally verified; publish BLOCKED on remote access)
+
+**Locally verified:** `goreleaser build --snapshot --clean --single-target` (GOWORK=off)
+succeeds and produces a working `hyperslop` binary (6s build; `--help` shows the
+customer surface). So the release mechanism is sound.
+
+`goreleaser check` exits 2 because the scaffold's `.goreleaser.yaml` uses
+properties deprecated in goreleaser v2.13+ (`snapshot.name_template`,
+`brews`→`homebrew_casks`). This is a pre-existing template issue, not introduced
+by the extraction; it needs a config cleanup before a real release but does not
+block building the binary.
+
+**BLOCKED (cannot complete autonomously):** the actual publish requires
+1. pushing hyperslop-cli (the `task/split-cli` work + main) to
+   `git@github.com:hyperslop-systems/hyperslop-cli` — needs the remote repo to
+   exist and push access I do not have authorization to use autonomously;
+2. tagging `v0.1.0` and pushing the tag, which triggers the release workflow
+   (needs org secrets: `GORELEASER_KEY`, GPG signing key, `HOMEBREW_TAP_TOKEN`,
+   `FURY_TOKEN`) — and the hyperslop-systems Homebrew tap + fury account I put in
+   `.goreleaser.yaml` (`hyperslop-systems/homebrew`, `push.fury.io/hyperslop-systems/`)
+   are unconfirmed guesses;
+3. waiting for `proxy.golang.org` to publish `hyperslop-cli@v0.1.0`;
+4. then in go-go-datadrop: `go get github.com/hyperslop-systems/hyperslop-cli@v0.1.0`,
+   remove the `replace … => ../hyperslop-cli`, `GOWORK=off go mod tidy`, commit.
+
+Until then, go-go-datadrop builds GOWORK=off via the local `replace … =>
+../hyperslop-cli` (the dev state), which is fully green. The extraction itself
+(the "build the ticket" code work) is complete and verified; only the downstream
+publish is blocked on access/authorization.
+
+**What unblocks Phase 9:** user confirms I may push to the hyperslop-systems
+remote (and the repo exists there); the org release secrets + the correct
+Homebrew tap/fury account are configured; then the tag push + the go-go-datadrop
+go.mod bump can run.
