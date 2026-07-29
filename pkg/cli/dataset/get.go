@@ -447,6 +447,8 @@ func streamToDestinationWithCopier(
 	return nil
 }
 
+const maxArchiveMetadataBytes = 16 << 20
+
 func copyVerifiedDatasetArchive(
 	dst io.Writer, body io.Reader, files []datadrop.DatasetFile,
 ) error {
@@ -470,7 +472,11 @@ func copyVerifiedDatasetArchive(
 		}
 
 		if header.Name == "manifest.json" || header.Name == "schema.json" {
-			if _, err := io.Copy(io.Discard, archive); err != nil {
+			if header.Size < 0 || header.Size > maxArchiveMetadataBytes {
+				return errors.Errorf("archive metadata entry %q has invalid size %d (maximum %d)",
+					header.Name, header.Size, maxArchiveMetadataBytes)
+			}
+			if _, err := io.CopyN(io.Discard, archive, header.Size); err != nil {
 				return errors.Wrapf(err, "read archive entry %s", header.Name)
 			}
 			continue
@@ -490,14 +496,13 @@ func copyVerifiedDatasetArchive(
 			return errors.Errorf("dataset archive entry %q is not a regular file", header.Name)
 		}
 
-		hasher := sha256.New()
-		size, err := io.Copy(hasher, archive)
-		if err != nil {
-			return errors.Wrapf(err, "read archive file %s", logicalPath)
+		if header.Size != file.SizeBytes {
+			return errors.Errorf("integrity check failed for %s: archive header says %d bytes, manifest says %d",
+				logicalPath, header.Size, file.SizeBytes)
 		}
-		if size != file.SizeBytes {
-			return errors.Errorf("integrity check failed for %s: archive has %d bytes, manifest says %d",
-				logicalPath, size, file.SizeBytes)
+		hasher := sha256.New()
+		if _, err := io.CopyN(hasher, archive, file.SizeBytes); err != nil {
+			return errors.Wrapf(err, "read archive file %s", logicalPath)
 		}
 		actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
 		if actualDigest != file.Digest {
