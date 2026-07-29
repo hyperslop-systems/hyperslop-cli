@@ -1,0 +1,200 @@
+package events
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"testing/iotest"
+	"time"
+
+	"github.com/go-go-golems/glazed/pkg/settings"
+
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+)
+
+func TestTailFollowRejectsRangeFiltersItCannotPreserve(t *testing.T) {
+	for name, rangeSetting := range map[string]rangeSettings{
+		"after":  {After: 7},
+		"before": {Before: 10},
+		"from":   {From: "2026-07-29T00:00:00Z"},
+		"to":     {To: "2026-07-30T00:00:00Z"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := &tailSettings{Follow: true, rangeSettings: rangeSetting}
+			if err := s.validateFollow(settings.OutputJSONL); err == nil {
+				t.Fatalf("validateFollowRange accepted --follow with %s", name)
+			}
+		})
+	}
+	if err := (&tailSettings{Follow: true}).validateFollow(settings.OutputJSONL); err != nil {
+		t.Fatalf("bare --follow rejected: %v", err)
+	}
+	if err := (&tailSettings{Follow: false, rangeSettings: rangeSettings{Before: 10}}).validateFollow(settings.OutputTable); err != nil {
+		t.Fatalf("bounded non-follow tail rejected: %v", err)
+	}
+}
+
+func TestTailFollowRequiresStreamingFormat(t *testing.T) {
+	for _, format := range []settings.OutputFormat{
+		settings.OutputTable, settings.OutputJSON, settings.OutputCSV,
+		settings.OutputTSV, settings.OutputYAML,
+	} {
+		if err := (&tailSettings{Follow: true}).validateFollow(format); err == nil {
+			t.Errorf("--follow accepted non-streaming format %s", format)
+		}
+	}
+	if err := (&tailSettings{Follow: true}).validateFollow(settings.OutputJSONL); err != nil {
+		t.Fatalf("--follow rejected JSONL: %v", err)
+	}
+}
+
+func TestTailQueryForcesDescendingOrderBeforeCursorValidation(t *testing.T) {
+	t.Run("after cursor is rejected locally", func(t *testing.T) {
+		s := &tailSettings{
+			Drop: "greenhouse",
+			rangeSettings: rangeSettings{
+				After: 10, Order: string(datadrop.OrderAsc), Limit: tailDefaultLimit,
+			},
+		}
+		if _, err := s.tailQuery(); err == nil {
+			t.Fatal("tailQuery accepted an after cursor after forcing descending order")
+		}
+	})
+
+	t.Run("before cursor is valid descending", func(t *testing.T) {
+		s := &tailSettings{
+			Drop: "greenhouse",
+			rangeSettings: rangeSettings{
+				Before: 10, Order: string(datadrop.OrderAsc), Limit: tailDefaultLimit,
+			},
+		}
+		q, err := s.tailQuery()
+		if err != nil {
+			t.Fatalf("tailQuery: %v", err)
+		}
+		if q.Order != datadrop.OrderDesc || q.Before != 10 {
+			t.Fatalf("query = %+v, want descending before=10", q)
+		}
+	})
+}
+
+func TestFollowStreamReconnectsAfterCleanEOFWithCursor(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var (
+		mu       sync.Mutex
+		afters   []string
+		requests int
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests++
+		afters = append(afters, r.URL.Query().Get("after"))
+		requestNumber := requests
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		// Both responses end cleanly without an SSE reset. The first must cause
+		// a reconnect; the second cancels the command so the test terminates.
+		if requestNumber == 2 {
+			cancel()
+		}
+	}))
+	defer server.Close()
+
+	api, err := client.New(server.URL, "")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	var waits []time.Duration
+	err = followStreamWithWait(ctx, nil, api, "greenhouse", datadrop.DefaultStream, 7,
+		func(_ context.Context, delay time.Duration) error {
+			waits = append(waits, delay)
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("followStreamWithWait: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if requests != 2 {
+		t.Fatalf("stream requests = %d, want 2", requests)
+	}
+	wantAfter := strconv.FormatInt(7, 10)
+	for i, after := range afters {
+		if after != wantAfter {
+			t.Errorf("request %d after = %q, want %q", i+1, after, wantAfter)
+		}
+	}
+	if len(waits) != 1 || waits[0] != streamReconnectInitial {
+		t.Fatalf("reconnect waits = %v, want [%v]", waits, streamReconnectInitial)
+	}
+}
+
+func TestFollowStreamReconnectsAfterTransientReadError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	requests := 0
+	api, err := client.New("http://stream.example", "")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	api.HTTP = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests++
+		var body io.ReadCloser
+		if requests == 1 {
+			body = io.NopCloser(io.MultiReader(
+				strings.NewReader(": heartbeat\n\n"),
+				iotest.ErrReader(io.ErrUnexpectedEOF),
+			))
+		} else {
+			cancel()
+			body = io.NopCloser(strings.NewReader(""))
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: body, Header: make(http.Header)}, nil
+	})}
+
+	var waits []time.Duration
+	err = followStreamWithWait(ctx, nil, api, "greenhouse", datadrop.DefaultStream, 9,
+		func(_ context.Context, delay time.Duration) error {
+			waits = append(waits, delay)
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("followStreamWithWait: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("stream requests = %d, want reconnect after read failure", requests)
+	}
+	if len(waits) != 1 || waits[0] != streamReconnectInitial {
+		t.Fatalf("reconnect waits = %v, want [%v]", waits, streamReconnectInitial)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestNextReconnectDelayIsBounded(t *testing.T) {
+	if got := nextReconnectDelay(time.Second); got != 2*time.Second {
+		t.Fatalf("nextReconnectDelay(1s) = %v, want 2s", got)
+	}
+	if got := nextReconnectDelay(streamReconnectMaximum); got != streamReconnectMaximum {
+		t.Fatalf("nextReconnectDelay(max) = %v, want %v", got, streamReconnectMaximum)
+	}
+}

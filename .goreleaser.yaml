@@ -1,5 +1,5 @@
 version: 2
-project_name: XXX
+project_name: hyperslop
 
 before:
   hooks:
@@ -8,7 +8,7 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - id: XXX-linux
+  - id: hyperslop-linux
     env:
       - CGO_ENABLED=1
       - CC_linux_amd64=gcc
@@ -17,8 +17,8 @@ builds:
       - CXX_linux_arm64=aarch64-linux-gnu-g++
       - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
       - 'CXX={{ index .Env (print "CXX_" .Os "_" .Arch) }}'
-    main: ./cmd/XXX
-    binary: XXX
+    main: ./cmd/hyperslop
+    binary: hyperslop
     goos:
       - linux
 # I am not able to test windows at the time
@@ -26,11 +26,11 @@ builds:
     goarch:
       - amd64
       - arm64
-  - id: XXX-darwin
+  - id: hyperslop-darwin
     env:
       - CGO_ENABLED=1
-    main: ./cmd/XXX
-    binary: XXX
+    main: ./cmd/hyperslop
+    binary: hyperslop
     goos:
       - darwin
     goarch:
@@ -39,7 +39,7 @@ builds:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 changelog:
   sort: asc
   filters:
@@ -52,25 +52,27 @@ signs:
     # setup for github actions according to https://goreleaser.com/ci/actions/
     args: [ "--batch", "-u", "{{ .Env.GPG_FINGERPRINT }}", "--output", "${signature}", "--detach-sign", "${artifact}" ]
 
-brews:
-  - name: XXX
-    description: "XXX is a tool"
-    homepage: "https://github.com/go-go-golems/XXX"
+homebrew_casks:
+  - name: hyperslop
+    binaries:
+      - hyperslop
+    description: "hyperslop is the agent/customer CLI for the datadrop backend"
+    homepage: "https://github.com/hyperslop-systems/hyperslop-cli"
     repository:
-      owner: go-go-golems
-      name: homebrew-go-go-go
+      owner: hyperslop-systems
+      name: homebrew
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
 
 nfpms:
   -
     id: packages
 
-    vendor: GO GO GOLEMS
-    homepage: https://github.com/go-go-golems/
+    vendor: HYPERSLOP SYSTEMS
+    homepage: https://github.com/hyperslop-systems/hyperslop-cli
     maintainer: Manuel Odendahl <wesen@ruinwesen.com>
 
     description: |-
-      XXX is a tool
+      hyperslop is the agent/customer CLI for the datadrop backend
 
     license: MIT
 
@@ -103,7 +105,7 @@ publishers:
     ids:
       - packages
     dir: "{{ dir .ArtifactPath }}"
-    cmd: curl -F package=@{{ .ArtifactName }} https://{{ .Env.FURY_TOKEN }}@push.fury.io/go-go-golems/
+    cmd: curl -F package=@{{ .ArtifactName }} https://{{ .Env.FURY_TOKEN }}@push.fury.io/hyperslop-systems/
 
 # modelines, feel free to remove those if you don't want/use them:
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json

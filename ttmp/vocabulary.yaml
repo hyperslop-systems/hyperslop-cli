@@ -1,0 +1,42 @@
+topics:
+    - slug: cli
+      description: 'topic: cli'
+    - slug: architecture
+      description: 'topic: architecture'
+    - slug: refactor
+      description: 'topic: refactor'
+    - slug: datadrop
+      description: 'topic: datadrop'
+    - slug: hyperslop
+      description: 'topic: hyperslop'
+    - slug: glazed
+      description: 'topic: glazed'
+    - slug: agent-cli
+      description: 'topic: agent-cli'
+    - slug: extraction
+      description: 'topic: extraction'
+docTypes:
+    - slug: design-doc
+      description: 'doc type: design-doc'
+    - slug: reference
+      description: 'doc type: reference'
+    - slug: playbook
+      description: 'doc type: playbook'
+    - slug: tutorial
+      description: 'doc type: tutorial'
+    - slug: working-note
+      description: 'doc type: working-note'
+    - slug: code-review
+      description: 'doc type: code-review'
+    - slug: skill
+      description: 'doc type: skill'
+    - slug: script
+      description: 'doc type: script'
+    - slug: log
+      description: 'doc type: log'
+    - slug: index
+      description: 'doc type: index'
+    - slug: task-list
+      description: 'doc type: task-list'
+intent: []
+status: []

@@ -2,7 +2,7 @@
 
 all: gifs
 
-VERSION=v0.1.14
+VERSION=v0.1.0
 GORELEASER_ARGS ?= --skip=sign --snapshot --clean
 GORELEASER_TARGET ?= --single-target
 
@@ -49,7 +49,7 @@ logcopter-generate:
 	GOWORK=off go generate ./...
 
 logcopter-check:
-	GOWORK=off go tool logcopter-gen -area-prefix go-go-golems.XXX -strip-prefix github.com/go-go-golems/XXX -check ./pkg/...
+	GOWORK=off go tool logcopter-gen -area-prefix hyperslop-systems.hyperslop-cli -strip-prefix github.com/hyperslop-systems/hyperslop-cli -check ./pkg/...
 
 glazed-lint-build:
 	@if [ -n "$(GLAZED_VERSION)" ] && [ "$(GLAZED_VERSION)" != "(devel)" ]; then \
@@ -80,7 +80,7 @@ tag-patch:
 
 release:
 	git push origin --tags
-	GOWORK=off GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/XXX@$(shell svu current)
+	GOWORK=off GOPROXY=proxy.golang.org go list -m github.com/hyperslop-systems/hyperslop-cli@$(shell svu current)
 
 bump-go-go-golems:
 	@deps="$$(awk '/^require[[:space:]]+github\.com\/go-go-golems\// { print $$2 } /^[[:space:]]*github\.com\/go-go-golems\// { print $$1 }' go.mod | sort -u)"; \
@@ -93,7 +93,5 @@ bump-go-go-golems:
 	fi
 	GOWORK=off go mod tidy
 
-XXX_BINARY=$(shell which XXX)
 install:
-	GOWORK=off go build -o ./dist/XXX ./cmd/XXX && \
-		cp ./dist/XXX $(XXX_BINARY)
+	GOWORK=off go install ./cmd/hyperslop
