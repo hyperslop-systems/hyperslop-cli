@@ -272,7 +272,7 @@ imports the registrars from hyperslop-cli; the admin root loads BOTH help sets
 (`doc` + `hapidoc`) so `datadrop help cli-output`/`getting-a-token` resolve (no
 slug overlap). `cmd/datadrop/tree_test.go` repointed to hyperslop-cli groups.
 
-- **Commits:** hyperslop-cli `8643a49`, go-go-datadrop `7dbbaf5`.
+- **Commits:** hyperslop-cli `8643a49`, go-go-datadrop `61b7a70`.
 - **What worked:** both modules build + full test green (incl. datadrop smoke +
   tree tests); `hyperslop --help` lists the customer verbs and NOT
   serve/healthcheck; `datadrop --help` lists both.
@@ -417,7 +417,7 @@ assessment and finding-by-finding disposition is in
 
 **Commit (code):** `1871472` — "fix(HYPERSLOP-1): address PR 1 correctness and safety review"
 
-**Commit (companion):** go-go-datadrop `5534a8a` — "fix(HYPERSLOP-1): keep admin CLI aligned with PR review fixes"
+**Commit (companion):** go-go-datadrop `7647177` — "fix(HYPERSLOP-1): keep admin CLI aligned with PR review fixes"
 
 ### What I did
 
@@ -482,6 +482,15 @@ assessment and finding-by-finding disposition is in
 - Initial `goreleaser check` exited 2 because `snapshot.name_template` and `brews`
   were deprecated. Migrated to `snapshot.version_template` and
   `homebrew_casks`; validation and snapshot build now pass.
+- The first go-go-datadrop push failed because Phase 4 had accidentally committed
+  the local binary. Exact remote error:
+
+  `remote: error: File datadrop is 119.88 MB; this exceeds GitHub's file size limit of 100.00 MB`
+
+  A deletion commit would not remove the blob from pushed history. Preserved
+  `backup/task-split-cli-with-binary`, reconstructed the two affected unpushed
+  commits without the blob, added `/datadrop` to `.gitignore`, retested, and
+  pushed clean commits `61b7a70` and `7647177`.
 
 ### What I learned
 
@@ -495,6 +504,8 @@ assessment and finding-by-finding disposition is in
   not weaken CI before checking repository settings.
 - Shared code needs shared prose parameterization too: dynamic env/error prefixes
   were insufficient while help examples still hard-coded one binary.
+- Passing tests do not prove a branch is publishable: inspect newly introduced
+  Git objects and ignore root build artifacts before the first remote push.
 
 ### What was tricky to build
 
@@ -511,6 +522,9 @@ assessment and finding-by-finding disposition is in
   second distinguishes literal `a.b`, nested `a -> b`, and literal backslashes.
 - Command help lives in both binaries. A deliberate `{{app}}` renderer avoided
   accidental replacement of product prose while keeping copy/paste examples correct.
+- Removing a >100 MB file in a later commit cannot satisfy GitHub because the
+  object remains reachable. Since the branch was unpushed, the safe solution was
+  a backup ref plus reconstruction from the parent of Phase 4, not blind history filtering.
 
 ### What warrants a second pair of eyes
 
@@ -525,8 +539,8 @@ assessment and finding-by-finding disposition is in
 
 ### What should be done in the future
 
-- Push both commits, wait for all checks on the new head, resolve the 16 threads,
-  and request a fresh Codex review.
+- Both coordinated branches are pushed. Wait for all checks on the new head,
+  resolve the 16 threads, and request a fresh Codex review.
 - Merge/release sequencing remains Phase 9: merge first, confirm external package
   destinations/secrets, tag hyperslop-cli, then replace go-go-datadrop's local
   module replacement with the published version.
@@ -548,7 +562,9 @@ assessment and finding-by-finding disposition is in
 
 - PR review head: `9c13c6253f2f9de7ffa5507a6a08bcc9f8ccc425`.
 - Review threads: 16 open before remediation (3 P1, 13 P2).
-- Fix heads: hyperslop-cli `1871472`; go-go-datadrop `5534a8a`.
+- Fix heads: hyperslop-cli `1871472`; go-go-datadrop `7647177`.
+- Rewritten clean go-go-datadrop Phase 4: `61b7a70`; backup of the unpushed
+  binary-bearing history: `backup/task-split-cli-with-binary`.
 - GitHub setting changed: Dependency Graph enabled; no security check was skipped.
 - No HTTP route or JSON field was removed. New `DeleteDatasetVersionResult` types
   the JSON body the server already emitted.

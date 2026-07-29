@@ -43,7 +43,7 @@ Phases 2-3 complete: moved pkg/client (+DR-7 device methods) and the shared CLI 
 
 ## 2026-07-29
 
-Phases 4-8 complete: command groups + customer help moved to hyperslop-cli (device flow refactored onto the client, DR-7); admin datadrop main rewired to import them (Phase 6 merged); hyperslop main+root wired (Phase 5, HYPERSLOP_* env); lint clean + go.sum tidied (Phase 7); hyperslop e2e smoke test against the real datadrop server + no-cycle CI guard (Phase 8). All tests green in both modules; hyperslop --help has no serve/healthcheck; datadrop --help has both. Commits: hyperslop-cli 8643a49,57727bb,9c8b43a,689a3cb; go-go-datadrop 7dbbaf5.
+Phases 4-8 complete: command groups + customer help moved to hyperslop-cli (device flow refactored onto the client, DR-7); admin datadrop main rewired to import them (Phase 6 merged); hyperslop main+root wired (Phase 5, HYPERSLOP_* env); lint clean + go.sum tidied (Phase 7); hyperslop e2e smoke test against the real datadrop server + no-cycle CI guard (Phase 8). All tests green in both modules; hyperslop --help has no serve/healthcheck; datadrop --help has both. Commits: hyperslop-cli 8643a49,57727bb,9c8b43a,689a3cb; go-go-datadrop 61b7a70.
 
 ### Related Files
 
@@ -61,11 +61,20 @@ Phase 8 expanded: hyperslop smoke test now runs the full authenticated path (cre
 
 ## 2026-07-29
 
-PR #1 takeover review: independently assessed the extraction, fixed all 16 inline findings with regression tests (hyperslop-cli 1871472; go-go-datadrop 5534a8a), enabled the GitHub dependency graph, corrected install/release scaffolding, and added code-review/01-pr-1-takeover-review.md. Full standalone/workspace tests, real-server smoke, lint, vet, gofmt, no-cycle, logcopter and GoReleaser validation pass.
+PR #1 takeover review: independently assessed the extraction, fixed all 16 inline findings with regression tests (hyperslop-cli 1871472; go-go-datadrop 7647177), enabled the GitHub dependency graph, corrected install/release scaffolding, and added code-review/01-pr-1-takeover-review.md. Full standalone/workspace tests, real-server smoke, lint, vet, gofmt, no-cycle, logcopter and GoReleaser validation pass.
 
 ### Related Files
 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — transactional verified downloads
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/events/tail.go — resilient SSE following
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/ttmp/2026/07/29/HYPERSLOP-1--extract-customer-facing-cli-from-go-go-datadrop-into-hyperslop-cli/code-review/01-pr-1-takeover-review.md — takeover assessment and finding disposition
+
+
+## 2026-07-29
+
+Companion branch publish hygiene: first go-go-datadrop push exposed a 125,701,651-byte root datadrop binary accidentally tracked by Phase 4. Preserved a local backup ref, reconstructed the two affected unpushed commits without the blob, added /datadrop to .gitignore, retested, and pushed clean Phase 4 61b7a70 plus review fix 7647177.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/go-go-datadrop/.gitignore — prevents root CLI build artifacts from entering history
 

@@ -31,7 +31,7 @@ RelatedFiles:
       Note: collision-free flattened JSON paths
 ExternalSources:
     - https://github.com/hyperslop-systems/hyperslop-cli/pull/1
-Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 16 inline findings were fixed with regression tests in commits 1871472 and 5534a8a.'
+Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 16 inline findings were fixed with regression tests in commits 1871472 and 7647177.'
 LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
@@ -52,14 +52,14 @@ The principal weakness was not architecture but adversarial review depth. Severa
 implementations were moved without checking clean network disconnects, failed downloads, path-key collisions,
 HTTP status semantics, one-time credential failure ordering, or numeric overflow. Automated review found 16
 valid issues (three P1, thirteen P2). All are remediated with regression tests in hyperslop-cli commit `1871472`
-and companion go-go-datadrop commit `5534a8a`.
+and companion go-go-datadrop commit `7647177`.
 
 ## Context
 
 - PR: <https://github.com/hyperslop-systems/hyperslop-cli/pull/1>
 - Reviewed head: `9c13c6253f2f9de7ffa5507a6a08bcc9f8ccc425`
 - Remediation head: `1871472`
-- Companion admin/server commit: go-go-datadrop `5534a8a`
+- Companion admin/server commit: go-go-datadrop `7647177`
 - Base: `main` (`f9a3048` locally; PR base at review time)
 - Initial CI: test, lint, CodeQL, gosec, govulncheck, and secret scanning passed. Dependency Review failed because the repository dependency graph was disabled, not because of a dependency vulnerability.
 
@@ -107,7 +107,10 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 5. **Template/repository setup was incomplete.** `make install` required an existing binary, Makefile version was
    `v0.1.14`, GoReleaser used deprecated fields, and Dependency Review could not run until the dependency graph was
    enabled.
-6. **PR size increases review risk.** The phase commits mitigate this, but a 115-file PR makes edge-case omissions
+6. **A build artifact entered companion history.** The go-go-datadrop Phase 4 commit accidentally tracked a
+   125,701,651-byte root `datadrop` executable. It did not affect tests but made the coordinated branch impossible
+   to push under GitHub's 100 MB object limit.
+7. **PR size increases review risk.** The phase commits mitigate this, but a 115-file PR makes edge-case omissions
    more likely. Future cross-repository moves should land extraction and behavior-hardening in smaller reviewable
    PRs where release sequencing permits.
 
@@ -139,6 +142,8 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 - Changed the scaffold Makefile version from `v0.1.14` to the planned first release `v0.1.0`.
 - Migrated GoReleaser `snapshot.name_template` to `snapshot.version_template` and `brews` to `homebrew_casks`.
   `goreleaser check` and `goreleaser build --snapshot --clean --single-target` pass.
+- Reconstructed the two affected unpushed go-go-datadrop commits without the 120 MB binary, retained a local backup
+  ref, added `/datadrop` to `.gitignore`, retested, and pushed clean Phase 4 `61b7a70` plus fix `7647177`.
 
 ## Validation evidence
 
@@ -161,8 +166,8 @@ Fresh after remediation:
 
 ### Remaining before merge/release
 
-1. Push `1871472` to the PR head and `5534a8a` to the companion go-go-datadrop branch.
-2. Wait for all PR checks, especially Dependency Review, on the new head.
+1. Both coordinated branches are pushed: PR head `ab68224` and go-go-datadrop `7647177`.
+2. Wait for all PR checks on the new head (Dependency Review already passes after enabling the graph).
 3. Resolve the 16 review threads only after GitHub sees the fixing commit and checks pass.
 4. Trigger a fresh Codex review to detect regressions or missed issues.
 5. Do not tag/release from the PR branch. Phase 9 still requires merge sequencing, confirmed Homebrew/Fury destinations and release secrets, then a tagged hyperslop-cli version before removing go-go-datadrop's local replace.
@@ -171,6 +176,6 @@ Fresh after remediation:
 
 - PR: <https://github.com/hyperslop-systems/hyperslop-cli/pull/1>
 - Fix commit: `1871472`
-- Companion admin/server fix: `5534a8a`
+- Companion admin/server fix: `7647177`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`
