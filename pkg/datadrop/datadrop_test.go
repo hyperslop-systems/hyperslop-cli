@@ -58,6 +58,19 @@ func TestNormalizeStream(t *testing.T) {
 	}
 }
 
+func TestValidateDatasetPathRejectsRootMarker(t *testing.T) {
+	for _, valid := range []string{"data.csv", "data/readings.csv", "a/.hidden"} {
+		if err := ValidateDatasetPath(valid); err != nil {
+			t.Errorf("ValidateDatasetPath(%q) = %v, want nil", valid, err)
+		}
+	}
+	for _, invalid := range []string{"", ".", "a/.", "../a", "/absolute", `a\\b`} {
+		if err := ValidateDatasetPath(invalid); err == nil {
+			t.Errorf("ValidateDatasetPath(%q) accepted an unusable path", invalid)
+		}
+	}
+}
+
 func TestValidateRetention(t *testing.T) {
 	for _, value := range []string{"", "1s", "30m", "24h", "90d", "2w", "5y", "999d"} {
 		if err := ValidateRetention(value); err != nil {

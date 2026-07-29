@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/iotest"
 
@@ -256,6 +257,59 @@ func TestDownloadSingleFileVerifiesResolvedVersionBeforePublication(t *testing.T
 		t.Fatal("file bytes were not requested from the manifest's concrete version")
 	}
 	assertFileContent(t, target, content)
+}
+
+func TestDownloadVersionPinsAllFilesToResolvedVersion(t *testing.T) {
+	files := map[string]string{
+		"data/a.csv": "a\n1\n",
+		"data/b.csv": "b\n2\n",
+	}
+	var fileRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/drops/greenhouse/datasets/readings/versions/latest" {
+			version := datadrop.DatasetVersion{Drop: "greenhouse", Dataset: "readings", Version: 7}
+			for logicalPath, content := range files {
+				version.Files = append(version.Files, datadrop.DatasetFile{
+					Path: logicalPath, Digest: digestString(content), SizeBytes: int64(len(content)),
+				})
+			}
+			_ = json.NewEncoder(w).Encode(version)
+			return
+		}
+		const prefix = "/v1/drops/greenhouse/datasets/readings/versions/7/files/"
+		if !strings.HasPrefix(r.URL.Path, prefix) {
+			t.Errorf("file request used an unpinned version: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		logicalPath := strings.TrimPrefix(r.URL.Path, prefix)
+		content, ok := files[logicalPath]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		fileRequests.Add(1)
+		_, _ = io.WriteString(w, content)
+	}))
+	defer server.Close()
+
+	api, err := client.New(server.URL, "token")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	output := t.TempDir()
+	err = downloadVersion(context.Background(), api, &getSettings{
+		Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion, Output: output,
+	})
+	if err != nil {
+		t.Fatalf("downloadVersion: %v", err)
+	}
+	if got := fileRequests.Load(); got != int32(len(files)) {
+		t.Fatalf("file requests = %d, want %d", got, len(files))
+	}
+	for logicalPath, content := range files {
+		assertFileContent(t, filepath.Join(output, filepath.FromSlash(logicalPath)), content)
+	}
 }
 
 func assertFileContent(t *testing.T, path, want string) {

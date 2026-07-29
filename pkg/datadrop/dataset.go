@@ -143,6 +143,8 @@ func ValidateDatasetPath(p string) error {
 	switch {
 	case p == "":
 		return errors.New("invalid path: must not be empty")
+	case p == ".":
+		return errors.New("invalid path \".\": must name a file beneath the dataset root")
 	case len(p) > maxPathLength:
 		return errors.Errorf("invalid path: must be at most %d characters, got %d", maxPathLength, len(p))
 	case strings.ContainsRune(p, 0):

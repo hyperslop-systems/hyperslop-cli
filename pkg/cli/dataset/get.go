@@ -184,6 +184,10 @@ func downloadVersion(ctx context.Context, api *client.Client, s *getSettings) er
 	}
 	defer func() { _ = root.Close() }()
 
+	// Pin every byte request to the manifest's immutable numeric version.
+	// Resolving "latest" independently per file could assemble a mixed version
+	// if a publisher commits while this loop is running.
+	concreteVersion := strconv.Itoa(found.Version)
 	for _, file := range found.Files {
 		// The logical path is server-validated, but this is the moment where a
 		// hostile path would escape the output directory, so it is checked again
@@ -191,7 +195,7 @@ func downloadVersion(ctx context.Context, api *client.Client, s *getSettings) er
 		if err := datadrop.ValidateDatasetPath(file.Path); err != nil {
 			return errors.Wrapf(err, "refusing to write %q", file.Path)
 		}
-		body, err := api.DownloadDatasetFile(ctx, s.Drop, s.Dataset, s.Version, file.Path)
+		body, err := api.DownloadDatasetFile(ctx, s.Drop, s.Dataset, concreteVersion, file.Path)
 		if err != nil {
 			return errors.Wrapf(err, "download %s", file.Path)
 		}

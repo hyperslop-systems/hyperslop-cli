@@ -56,7 +56,9 @@ Show the most recent events in a drop.
 
 With --follow, the command subscribes to the drop's SSE stream and prints new
 events as they are appended, resuming from the last sequence it saw if the
-connection drops. Ctrl-C ends it and exits 0.
+connection drops. Ctrl-C ends it and exits 0. Because the live feed resumes by
+sequence only, --follow cannot be combined with --after, --before, --from, or
+--to; use a bounded tail/query for those filters.
 
     {{app}} tail greenhouse
     {{app}} tail greenhouse --follow --output-fields time,data.temp_c
@@ -99,6 +101,9 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 	if err := vals.DecodeSectionInto(schema.DefaultSlug, s); err != nil {
 		return err
 	}
+	if err := s.validateFollowRange(); err != nil {
+		return err
+	}
 
 	q, err := s.tailQuery()
 	if err != nil {
@@ -129,6 +134,34 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 		cursor = ordered[len(ordered)-1].Seq
 	}
 	return followStream(ctx, gp, api, s.Drop, s.Stream, cursor)
+}
+
+// validateFollowRange rejects filters the SSE endpoint cannot preserve. The
+// live API resumes by sequence cursor only; applying time/before bounds to the
+// initial page and then dropping them would either replay explicitly excluded
+// history or emit later events outside the requested range.
+func (s *tailSettings) validateFollowRange() error {
+	if !s.Follow {
+		return nil
+	}
+	var incompatible []string
+	if s.After > 0 {
+		incompatible = append(incompatible, "--after")
+	}
+	if s.Before > 0 {
+		incompatible = append(incompatible, "--before")
+	}
+	if s.From != "" {
+		incompatible = append(incompatible, "--from")
+	}
+	if s.To != "" {
+		incompatible = append(incompatible, "--to")
+	}
+	if len(incompatible) > 0 {
+		return errors.Errorf("--follow cannot be combined with %s: the live stream resumes by sequence cursor only",
+			strings.Join(incompatible, ", "))
+	}
+	return nil
 }
 
 // tailQuery fixes the newest-first retrieval order before Normalize validates

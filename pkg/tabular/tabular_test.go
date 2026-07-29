@@ -152,7 +152,7 @@ func TestFlattenFormsAgreeOnColumnNames(t *testing.T) {
 }
 
 func TestFlattenEscapesLiteralPathSeparatorsWithoutCollisions(t *testing.T) {
-	payload := json.RawMessage(`{"a.b":1,"a":{"b":2},"a\\b":3}`)
+	payload := json.RawMessage(`{"a.b":1,"a":{"b":2},"a\\b":3,"":{"a":4},"\\0":5,"empty":null}`)
 
 	values := map[string]any{}
 	if err := FlattenValues("", payload, values); err != nil {
@@ -162,14 +162,19 @@ func TestFlattenEscapesLiteralPathSeparatorsWithoutCollisions(t *testing.T) {
 		`a\.b`: "1", // literal key "a.b"
 		`a.b`:  "2", // nested path a -> b
 		`a\\b`: "3", // literal backslash is escaped too
+		`\0.a`: "4", // empty key segment is explicit
+		`\\0`:  "5", // literal "\\0" remains distinct from empty
 	} {
 		got, ok := values[key].(json.Number)
 		if !ok || got.String() != want {
 			t.Errorf("column %q = %v (%T), want json.Number(%s)", key, values[key], values[key], want)
 		}
 	}
-	if len(values) != 3 {
-		t.Fatalf("flattened columns = %v, want three collision-free paths", values)
+	if value, present := values["empty"]; !present || value != nil {
+		t.Fatalf("nested null = %v (present=%v), want an explicit nil leaf", value, present)
+	}
+	if len(values) != 6 {
+		t.Fatalf("flattened columns = %v, want six collision-free paths", values)
 	}
 
 	stringsForm := map[string]string{}
@@ -388,6 +393,40 @@ func TestInstantRecognitionIsStrict(t *testing.T) {
 		if !isInstant(s) {
 			t.Errorf("isInstant(%q) = false, want true", s)
 		}
+	}
+}
+
+func TestFromRowsEscapesCSVHeadersAndSchemaPropertiesConsistently(t *testing.T) {
+	table, err := FromRows(
+		SourceRef{}, strings.NewReader("location.lat,value\\path\nnorth,001\n"), FormatCSV, 10,
+		map[string]PropType{
+			"location.lat": {Type: "string"},
+			"value\\path":  {Type: "string"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("FromRows: %v", err)
+	}
+	want := []string{`location\.lat`, `value\\path`}
+	if len(table.Fields) != len(want) {
+		t.Fatalf("fields = %+v, want %v", table.Fields, want)
+	}
+	for i, name := range want {
+		if table.Fields[i].Name != name {
+			t.Errorf("field %d = %q, want %q", i, table.Fields[i].Name, name)
+		}
+		if table.Fields[i].InferredFrom != SourceSchema {
+			t.Errorf("field %q inferred from %s, want schema", name, table.Fields[i].InferredFrom)
+		}
+		if _, ok := table.Rows[0][name]; !ok {
+			t.Errorf("row has no value for escaped field %q: %v", name, table.Rows[0])
+		}
+	}
+	if len(table.Rows[0]) != 2 {
+		t.Fatalf("row contains duplicate escaped/unescaped columns: %v", table.Rows[0])
+	}
+	if got := table.Rows[0][`value\\path`]; got != "001" {
+		t.Fatalf("schema-declared text value = %v (%T), want preserved 001", got, got)
 	}
 }
 

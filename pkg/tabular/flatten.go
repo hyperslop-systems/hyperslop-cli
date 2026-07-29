@@ -84,6 +84,13 @@ func flattenValue(prefix string, value any, emit leafFunc) error {
 // escaping, {"a.b": 1, "a": {"b": 2}} maps two distinct JSON paths onto the
 // same column and whichever map entry is visited last silently wins.
 func escapeFlattenSegment(segment string) string {
+	if segment == "" {
+		// A visible marker is required: without one, {"":{"a":1},"a":2}
+		// maps both leaves to "a", and {"":null} is mistaken for a
+		// top-level null. A literal "\\0" key remains distinct because the
+		// backslash is escaped below.
+		return `\0`
+	}
 	segment = strings.ReplaceAll(segment, `\`, `\\`)
 	return strings.ReplaceAll(segment, `.`, `\.`)
 }

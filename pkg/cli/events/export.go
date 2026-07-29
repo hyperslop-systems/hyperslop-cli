@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -119,16 +120,48 @@ func (c *ExportCommand) RunIntoWriter(
 	}
 	defer func() { _ = body.Close() }()
 
-	sink := w
 	if s.OutputFile != "" {
-		file, err := os.Create(s.OutputFile)
-		if err != nil {
-			return errors.Wrapf(err, "create %s", s.OutputFile)
-		}
-		defer func() { _ = file.Close() }()
-		sink = file
+		return publishExportFile(s.OutputFile, body)
+	}
+	_, err = io.Copy(w, body)
+	return errors.Wrap(err, "write export")
+}
+
+// publishExportFile preserves an existing export until the replacement has
+// transferred completely and reached disk. Truncating the destination before
+// io.Copy turns a connection reset into loss of the last known-good export.
+func publishExportFile(output string, body io.Reader) error {
+	if info, err := os.Lstat(output); err == nil && info.IsDir() {
+		return errors.Errorf("export destination %q is a directory", output)
+	} else if err != nil && !os.IsNotExist(err) {
+		return errors.Wrapf(err, "inspect export destination %s", output)
 	}
 
-	_, err = io.Copy(sink, body)
-	return errors.Wrap(err, "write export")
+	temp, err := os.CreateTemp(filepath.Dir(output), "."+filepath.Base(output)+"-*.tmp")
+	if err != nil {
+		return errors.Wrapf(err, "create temporary export for %s", output)
+	}
+	tempName := temp.Name()
+	published := false
+	defer func() {
+		_ = temp.Close()
+		if !published {
+			_ = os.Remove(tempName)
+		}
+	}()
+
+	if _, err := io.Copy(temp, body); err != nil {
+		return errors.Wrap(err, "write export")
+	}
+	if err := temp.Sync(); err != nil {
+		return errors.Wrapf(err, "sync temporary export for %s", output)
+	}
+	if err := temp.Close(); err != nil {
+		return errors.Wrapf(err, "close temporary export for %s", output)
+	}
+	if err := os.Rename(tempName, output); err != nil {
+		return errors.Wrapf(err, "publish export %s", output)
+	}
+	published = true
+	return nil
 }

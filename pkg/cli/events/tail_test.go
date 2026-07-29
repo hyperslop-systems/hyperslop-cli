@@ -13,6 +13,28 @@ import (
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
 )
 
+func TestTailFollowRejectsRangeFiltersItCannotPreserve(t *testing.T) {
+	for name, settings := range map[string]rangeSettings{
+		"after":  {After: 7},
+		"before": {Before: 10},
+		"from":   {From: "2026-07-29T00:00:00Z"},
+		"to":     {To: "2026-07-30T00:00:00Z"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := &tailSettings{Follow: true, rangeSettings: settings}
+			if err := s.validateFollowRange(); err == nil {
+				t.Fatalf("validateFollowRange accepted --follow with %s", name)
+			}
+		})
+	}
+	if err := (&tailSettings{Follow: true}).validateFollowRange(); err != nil {
+		t.Fatalf("bare --follow rejected: %v", err)
+	}
+	if err := (&tailSettings{Follow: false, rangeSettings: rangeSettings{Before: 10}}).validateFollowRange(); err != nil {
+		t.Fatalf("bounded non-follow tail rejected: %v", err)
+	}
+}
+
 func TestTailQueryForcesDescendingOrderBeforeCursorValidation(t *testing.T) {
 	t.Run("after cursor is rejected locally", func(t *testing.T) {
 		s := &tailSettings{

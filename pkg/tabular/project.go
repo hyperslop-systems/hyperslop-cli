@@ -76,13 +76,19 @@ func FromRows(
 			"unsupported row format %q: expected csv, ndjson, or json", string(format))
 	}
 
-	b := newBuilder(ref, props, nil)
+	b := newBuilder(ref, escapedProperties(props), nil)
 
 	opts := ReadOptions{
 		MaxRows: ClampRows(limit),
 		// A CSV author's column order carries meaning; preserve it rather than
 		// alphabetizing the file's own layout away.
-		OnHeader:    func(columns []string) { b.setLeading(columns) },
+		OnHeader: func(columns []string) {
+			escaped := make([]string, len(columns))
+			for i, column := range columns {
+				escaped[i] = escapeFlattenSegment(column)
+			}
+			b.setLeading(escaped)
+		},
 		TextColumns: textColumns(props),
 	}
 
@@ -99,6 +105,20 @@ func FromRows(
 	}
 
 	return b.table(truncated, StrategyHead), nil
+}
+
+// escapedProperties maps schema metadata onto the same collision-free column
+// names FlattenValues emits. CSV typing still receives the original names via
+// textColumns because it runs before JSON-object flattening.
+func escapedProperties(props map[string]PropType) map[string]PropType {
+	if len(props) == 0 {
+		return nil
+	}
+	out := make(map[string]PropType, len(props))
+	for name, prop := range props {
+		out[escapeFlattenSegment(name)] = prop
+	}
+	return out
 }
 
 // textColumns lists the columns a schema declares as strings.

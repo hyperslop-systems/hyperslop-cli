@@ -210,6 +210,12 @@ func buildCommitRequest(s *pushSettings) (datadrop.CommitVersionRequest, error) 
 		if err := json.Unmarshal(raw, &manifest); err != nil {
 			return datadrop.CommitVersionRequest{}, errors.Wrapf(err, "manifest %s", s.Manifest)
 		}
+		// JSON null is a valid absent manifest (matching ParseManifest). It
+		// decodes a map to nil, so restore an object before applying CLI
+		// overrides instead of panicking on assignment below.
+		if manifest == nil {
+			manifest = map[string]any{}
+		}
 	}
 
 	for key, value := range map[string]string{

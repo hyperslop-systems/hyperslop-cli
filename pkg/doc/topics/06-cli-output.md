@@ -66,7 +66,9 @@ values remain absent rather than changing the field name or row shape.
 
 Nested payload objects use `.` as a path separator. A literal `.` or `\\` in a
 JSON key is escaped with `\\`, so `{"a.b": 1, "a": {"b": 2}}` produces the two
-distinct columns `data.a\\.b` and `data.a.b` rather than losing one value.
+distinct columns `data.a\\.b` and `data.a.b` rather than losing one value. An
+empty key segment is encoded as `\\0`; a literal key `\\0` is distinct because
+its backslash is escaped to `\\\\0`.
 
 `--output-fields` projects these emitted columns in the requested order:
 
