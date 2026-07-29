@@ -76,7 +76,7 @@ stays pipeable.
 		cmds.WithFlags(
 			fields.New("file", fields.TypeStringList,
 				fields.WithDefault([]string{}),
-				fields.WithHelp("local file to publish; repeatable. Use LOCAL:LOGICAL to rename within the dataset")),
+				fields.WithHelp("local file to publish; repeatable. Use LOCAL:LOGICAL to rename; an existing path containing ':' is treated literally")),
 			fields.New("manifest", fields.TypeString,
 				fields.WithDefault(""),
 				fields.WithHelp(`manifest JSON document, or "-" for stdin`)),
@@ -163,10 +163,7 @@ func resolvePushFiles(files []string, flatten bool) ([]client.PushFile, error) {
 	seen := map[string]string{}
 
 	for _, entry := range files {
-		local, logical := entry, ""
-		if before, after, found := strings.Cut(entry, ":"); found && after != "" {
-			local, logical = before, after
-		}
+		local, logical := splitPushFileEntry(entry)
 
 		if logical == "" {
 			logical = local
@@ -194,6 +191,23 @@ func resolvePushFiles(files []string, flatten bool) ([]client.PushFile, error) {
 		resolved = append(resolved, client.PushFile{LocalPath: local, LogicalPath: logical})
 	}
 	return resolved, nil
+}
+
+// splitPushFileEntry gives an existing local path precedence over the optional
+// LOCAL:LOGICAL mapping syntax. Colons are legal filename characters on Unix,
+// and the drive separator is part of a Windows volume name; neither should
+// silently reinterpret a real file as a mapping.
+func splitPushFileEntry(entry string) (string, string) {
+	if _, err := os.Stat(entry); err == nil || !os.IsNotExist(err) {
+		return entry, ""
+	}
+
+	volumeLength := len(filepath.VolumeName(entry))
+	prefix, suffix, found := strings.Cut(entry[volumeLength:], ":")
+	if !found || suffix == "" {
+		return entry, ""
+	}
+	return entry[:volumeLength] + prefix, suffix
 }
 
 // buildCommitRequest merges the manifest document with the convenience flags.

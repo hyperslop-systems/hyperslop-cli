@@ -38,10 +38,11 @@ func NewShowCommand() (cmds.Command, error) {
 		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Show the highest — that is, the active — schema version for a stream.
 
-The spec column holds the JSON Schema document exactly as it was submitted, so
-extracting it round-trips:
+The spec column holds the JSON Schema document exactly as it was submitted.
+Extract the column from the structured result before using it as a schema file:
 
-    {{app}} schema show greenhouse --format jsonl --output-fields spec --format json
+    {{app}} schema show greenhouse --format jsonl --output-fields spec | jq '.spec' > reading.schema.json
+    {{app}} schema put another-drop --file reading.schema.json --mode strict
 `))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,

@@ -14,6 +14,25 @@ import (
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
 )
 
+func TestImportDatasetRejectsNegativeRowsBeforeRequest(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests++
+	}))
+	defer server.Close()
+	api, err := New(server.URL, "token")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := api.ImportDataset(context.Background(), "drop", "dataset", "latest",
+		"rows.csv", "events", "csv", -1, false); err == nil {
+		t.Fatal("ImportDataset accepted a negative row limit")
+	}
+	if requests != 0 {
+		t.Fatalf("negative row limit sent %d requests, want none", requests)
+	}
+}
+
 func TestGarbageCollectRejectsNegativeAgeBeforeRequest(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

@@ -416,6 +416,9 @@ func (c *Client) ImportDataset(
 	ctx context.Context, drop, dataset, version, logicalPath, stream, format string,
 	maxRows int, strict bool,
 ) (datadrop.ImportResult, error) {
+	if maxRows < 0 {
+		return datadrop.ImportResult{}, errors.Errorf("client: max rows must not be negative, got %d", maxRows)
+	}
 	query := url.Values{}
 	query.Set("path", logicalPath)
 	if stream != "" && stream != datadrop.DefaultStream {

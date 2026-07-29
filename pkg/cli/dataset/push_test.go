@@ -8,6 +8,29 @@ import (
 	"testing"
 )
 
+func TestResolvePushFilesPreservesExistingColonPath(t *testing.T) {
+	directory := t.TempDir()
+	t.Chdir(directory)
+	const name = "readings:2026.csv"
+	if err := os.WriteFile(name, []byte("value\n1\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	files, err := resolvePushFiles([]string{name}, false)
+	if err != nil {
+		t.Fatalf("resolvePushFiles: %v", err)
+	}
+	if len(files) != 1 || files[0].LocalPath != name || files[0].LogicalPath != name {
+		t.Fatalf("files = %+v, want literal colon path", files)
+	}
+}
+
+func TestSplitPushFileEntryStillSupportsMapping(t *testing.T) {
+	local, logical := splitPushFileEntry("local.csv:data/readings.csv")
+	if local != "local.csv" || logical != "data/readings.csv" {
+		t.Fatalf("split = (%q, %q)", local, logical)
+	}
+}
+
 func TestResolvePushFilesRejectsNonRegularInput(t *testing.T) {
 	if _, err := os.Stat("/dev/null"); err != nil {
 		t.Skip("platform has no /dev/null device")

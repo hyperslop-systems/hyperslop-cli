@@ -23,6 +23,17 @@ import (
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
 )
 
+func TestGetSettingsRejectsArchiveAndFileTogether(t *testing.T) {
+	if err := (&getSettings{Archive: true, File: "data/readings.csv"}).validate(); err == nil {
+		t.Fatal("get settings accepted --archive with --file")
+	}
+	for _, settings := range []getSettings{{Archive: true}, {File: "data/readings.csv"}, {}} {
+		if err := settings.validate(); err != nil {
+			t.Fatalf("valid settings rejected: %v", err)
+		}
+	}
+}
+
 func TestPublishDownloadedFileVerifiesBeforePublication(t *testing.T) {
 	output := t.TempDir()
 	root, err := os.OpenRoot(output)
@@ -358,6 +369,59 @@ func TestDownloadSingleFileVerifiesResolvedVersionBeforePublication(t *testing.T
 		t.Fatal("file bytes were not requested from the manifest's concrete version")
 	}
 	assertFileContent(t, target, content)
+}
+
+func TestDownloadVersionForceDoesNotMixVersionsOnLaterFailure(t *testing.T) {
+	files := map[string]string{
+		"data/a.csv": "new a\n",
+		"data/b.csv": "new b\n",
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/drops/greenhouse/datasets/readings/versions/latest" {
+			version := datadrop.DatasetVersion{Drop: "greenhouse", Dataset: "readings", Version: 7}
+			for logicalPath, content := range files {
+				version.Files = append(version.Files, datadrop.DatasetFile{
+					Path: logicalPath, Digest: digestString(content), SizeBytes: int64(len(content)),
+				})
+			}
+			_ = json.NewEncoder(w).Encode(version)
+			return
+		}
+		const prefix = "/v1/drops/greenhouse/datasets/readings/versions/7/files/"
+		logicalPath := strings.TrimPrefix(r.URL.Path, prefix)
+		if logicalPath == "data/b.csv" {
+			// The HTTP request succeeds but integrity verification fails after a
+			// has been staged, reproducing the old mixed-version failure.
+			_, _ = io.WriteString(w, "corrupt b\n")
+			return
+		}
+		_, _ = io.WriteString(w, files[logicalPath])
+	}))
+	defer server.Close()
+	api, err := client.New(server.URL, "token")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	output := t.TempDir()
+	for logicalPath, old := range map[string]string{"data/a.csv": "old a\n", "data/b.csv": "old b\n"} {
+		filename := filepath.Join(output, filepath.FromSlash(logicalPath))
+		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filename, []byte(old), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = downloadVersion(context.Background(), api, &getSettings{
+		Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion,
+		Output: output, Force: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "integrity check failed") {
+		t.Fatalf("downloadVersion error = %v, want integrity failure", err)
+	}
+	assertFileContent(t, filepath.Join(output, "data", "a.csv"), "old a\n")
+	assertFileContent(t, filepath.Join(output, "data", "b.csv"), "old b\n")
+	assertNoDownloadTemps(t, filepath.Join(output, "data"))
 }
 
 func TestDownloadVersionPinsAllFilesToResolvedVersion(t *testing.T) {

@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+func TestValidateTokenNameCountsUnicodeCharacters(t *testing.T) {
+	if err := ValidateTokenName(strings.Repeat("界", 100)); err != nil {
+		t.Fatalf("100-character CJK token name rejected: %v", err)
+	}
+	err := ValidateTokenName(strings.Repeat("界", 101))
+	if err == nil || !strings.Contains(err.Error(), "101 characters") {
+		t.Fatalf("101-character token name error = %v", err)
+	}
+}
+
 func TestValidateName(t *testing.T) {
 	valid := []string{"a", "greenhouse", "zone-a", "sensor_7", "abc123", "0start",
 		strings.Repeat("a", 63)} // 63 chars is the documented maximum

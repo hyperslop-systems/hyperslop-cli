@@ -113,6 +113,9 @@ func (c *GetCommand) Run(ctx context.Context, vals *values.Values) error {
 	if err := vals.DecodeSectionInto(schema.DefaultSlug, s); err != nil {
 		return err
 	}
+	if err := s.validate(); err != nil {
+		return err
+	}
 	if s.Version == "" {
 		s.Version = datadrop.LatestVersion
 	}
@@ -134,6 +137,13 @@ func (c *GetCommand) Run(ctx context.Context, vals *values.Values) error {
 		return errors.New("--output DIRECTORY is required when downloading a whole version")
 	}
 	return downloadVersion(ctx, api, s)
+}
+
+func (s *getSettings) validate() error {
+	if s.Archive && s.File != "" {
+		return errors.New("--archive and --file are mutually exclusive")
+	}
+	return nil
 }
 
 // downloadArchive downloads a tar stream and, by default, verifies every
@@ -211,6 +221,8 @@ func downloadVersion(ctx context.Context, api *client.Client, s *getSettings) er
 	// Resolving "latest" independently per file could assemble a mixed version
 	// if a publisher commits while this loop is running.
 	concreteVersion := strconv.Itoa(found.Version)
+	staged := make([]stagedDownloadedFile, 0, len(found.Files))
+	defer func() { cleanupStagedDownloads(root, staged) }()
 	for _, file := range found.Files {
 		// The logical path is server-validated, but this is the moment where a
 		// hostile path would escape the output directory, so it is checked again
@@ -222,9 +234,16 @@ func downloadVersion(ctx context.Context, api *client.Client, s *getSettings) er
 		if err != nil {
 			return errors.Wrapf(err, "download %s", file.Path)
 		}
-		if err := publishDownloadedFile(root, file.Path, body, file.Digest, !s.NoVerify, s.Force); err != nil {
+		stagedFile, err := stageDownloadedFile(root, file.Path, body, file.Digest, !s.NoVerify, s.Force)
+		if err != nil {
 			return errors.Wrapf(err, "download %s", file.Path)
 		}
+		staged = append(staged, stagedFile)
+	}
+	if err := publishStagedDownloads(root, staged, s.Force); err != nil {
+		return err
+	}
+	for _, file := range found.Files {
 		fmt.Fprintf(os.Stderr, "%s  %s\n", ddcli.HumanBytes(file.SizeBytes), file.Path)
 	}
 
@@ -233,6 +252,168 @@ func downloadVersion(ctx context.Context, api *client.Client, s *getSettings) er
 	return nil
 }
 
+type stagedDownloadedFile struct {
+	logicalPath string
+	tempName    string
+	backupName  string
+}
+
+// stageDownloadedFile writes and verifies one file without making it visible at
+// its logical destination. Whole-version downloads collect every such stage
+// before changing any existing file, which prevents a failed later transfer
+// from producing a mixed-version directory.
+func stageDownloadedFile(
+	root *os.Root,
+	logicalPath string,
+	body io.ReadCloser,
+	expectedDigest string,
+	verify bool,
+	force bool,
+) (stagedDownloadedFile, error) {
+	defer func() { _ = body.Close() }()
+
+	parent := path.Dir(logicalPath)
+	if parent != "." {
+		if err := rejectSymlinkComponents(root, parent); err != nil {
+			return stagedDownloadedFile{}, err
+		}
+		if err := root.MkdirAll(parent, 0o755); err != nil {
+			return stagedDownloadedFile{}, errors.Wrapf(err, "create directory for %s", logicalPath)
+		}
+	}
+	if info, err := root.Lstat(logicalPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return stagedDownloadedFile{}, errors.Errorf("refusing symlink destination %q", logicalPath)
+		}
+		if !force {
+			return stagedDownloadedFile{}, errors.Errorf("destination %q already exists (use --force to replace it)", logicalPath)
+		}
+	} else if !os.IsNotExist(err) {
+		return stagedDownloadedFile{}, errors.Wrapf(err, "inspect destination %s", logicalPath)
+	}
+
+	tempName, err := downloadTempName(parent)
+	if err != nil {
+		return stagedDownloadedFile{}, err
+	}
+	keepTemp := false
+	defer func() {
+		if !keepTemp {
+			_ = root.Remove(tempName)
+		}
+	}()
+	file, err := root.OpenFile(tempName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return stagedDownloadedFile{}, errors.Wrapf(err, "create temporary file for %s", logicalPath)
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = file.Close()
+		}
+	}()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(file, hasher), body); err != nil {
+		return stagedDownloadedFile{}, errors.Wrapf(err, "write temporary file for %s", logicalPath)
+	}
+	if err := file.Sync(); err != nil {
+		return stagedDownloadedFile{}, errors.Wrapf(err, "sync temporary file for %s", logicalPath)
+	}
+	if err := file.Close(); err != nil {
+		return stagedDownloadedFile{}, errors.Wrapf(err, "close temporary file for %s", logicalPath)
+	}
+	closed = true
+	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+	if verify && actualDigest != expectedDigest {
+		return stagedDownloadedFile{}, errors.Errorf(
+			"integrity check failed for %s: content hashes to %s, manifest says %s",
+			logicalPath, actualDigest, expectedDigest)
+	}
+	keepTemp = true
+	return stagedDownloadedFile{logicalPath: logicalPath, tempName: tempName}, nil
+}
+
+func cleanupStagedDownloads(root *os.Root, staged []stagedDownloadedFile) {
+	for _, file := range staged {
+		if file.tempName != "" {
+			_ = root.Remove(file.tempName)
+		}
+		if file.backupName != "" {
+			_ = root.Remove(file.backupName)
+		}
+	}
+}
+
+// publishStagedDownloads changes destinations only after every payload has
+// downloaded and passed verification. Existing force targets are moved to
+// same-directory backups first; a failure while publishing restores them.
+func publishStagedDownloads(root *os.Root, staged []stagedDownloadedFile, force bool) error {
+	published := make([]int, 0, len(staged))
+	committed := false
+	rollback := func() {
+		for i := len(published) - 1; i >= 0; i-- {
+			_ = root.Remove(staged[published[i]].logicalPath)
+		}
+		for i := range staged {
+			if staged[i].backupName != "" {
+				_ = root.Rename(staged[i].backupName, staged[i].logicalPath)
+			}
+		}
+	}
+	defer func() {
+		if !committed {
+			rollback()
+		}
+	}()
+
+	if force {
+		for i := range staged {
+			if _, err := root.Lstat(staged[i].logicalPath); os.IsNotExist(err) {
+				continue
+			} else if err != nil {
+				return errors.Wrapf(err, "inspect destination %s", staged[i].logicalPath)
+			}
+			backup, err := downloadTempName(path.Dir(staged[i].logicalPath))
+			if err != nil {
+				return err
+			}
+			if err := root.Rename(staged[i].logicalPath, backup); err != nil {
+				return errors.Wrapf(err, "back up destination %s", staged[i].logicalPath)
+			}
+			staged[i].backupName = backup
+		}
+	}
+
+	for i := range staged {
+		var err error
+		if force {
+			err = root.Rename(staged[i].tempName, staged[i].logicalPath)
+		} else {
+			err = root.Link(staged[i].tempName, staged[i].logicalPath)
+			if err == nil {
+				err = root.Remove(staged[i].tempName)
+			}
+		}
+		if err != nil {
+			return errors.Wrapf(err, "publish %s", staged[i].logicalPath)
+		}
+		staged[i].tempName = ""
+		published = append(published, i)
+	}
+	for i := range staged {
+		if staged[i].backupName != "" {
+			// Publication already succeeded; a failed best-effort backup cleanup
+			// must not report failure and trigger rollback of the new version.
+			_ = root.Remove(staged[i].backupName)
+		}
+	}
+	committed = true
+	return nil
+}
+
+// publishDownloadedFile retains the single-file helper contract while sharing
+// the same staging path as a whole-version transaction.
 func publishDownloadedFile(
 	root *os.Root,
 	logicalPath string,
@@ -241,75 +422,12 @@ func publishDownloadedFile(
 	verify bool,
 	force bool,
 ) error {
-	defer func() { _ = body.Close() }()
-
-	parent := path.Dir(logicalPath)
-	if parent != "." {
-		if err := rejectSymlinkComponents(root, parent); err != nil {
-			return err
-		}
-		if err := root.MkdirAll(parent, 0o755); err != nil {
-			return errors.Wrapf(err, "create directory for %s", logicalPath)
-		}
-	}
-	if info, err := root.Lstat(logicalPath); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			return errors.Errorf("refusing symlink destination %q", logicalPath)
-		}
-		if !force {
-			return errors.Errorf("destination %q already exists (use --force to replace it)", logicalPath)
-		}
-	} else if !os.IsNotExist(err) {
-		return errors.Wrapf(err, "inspect destination %s", logicalPath)
-	}
-
-	tempName, err := downloadTempName(parent)
+	staged, err := stageDownloadedFile(root, logicalPath, body, expectedDigest, verify, force)
 	if err != nil {
 		return err
 	}
-	file, err := root.OpenFile(tempName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return errors.Wrapf(err, "create temporary file for %s", logicalPath)
-	}
-	published := false
-	defer func() {
-		_ = file.Close()
-		if !published {
-			_ = root.Remove(tempName)
-		}
-	}()
-
-	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(file, hasher), body); err != nil {
-		return errors.Wrapf(err, "write temporary file for %s", logicalPath)
-	}
-	if err := file.Sync(); err != nil {
-		return errors.Wrapf(err, "sync temporary file for %s", logicalPath)
-	}
-	if err := file.Close(); err != nil {
-		return errors.Wrapf(err, "close temporary file for %s", logicalPath)
-	}
-	actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
-	if verify && actualDigest != expectedDigest {
-		return errors.Errorf(
-			"integrity check failed for %s: content hashes to %s, manifest says %s",
-			logicalPath, actualDigest, expectedDigest)
-	}
-
-	if force {
-		if err := root.Rename(tempName, logicalPath); err != nil {
-			return errors.Wrapf(err, "publish %s", logicalPath)
-		}
-	} else {
-		if err := root.Link(tempName, logicalPath); err != nil {
-			return errors.Wrapf(err, "publish %s without overwrite", logicalPath)
-		}
-		if err := root.Remove(tempName); err != nil {
-			return errors.Wrapf(err, "remove temporary link for %s", logicalPath)
-		}
-	}
-	published = true
-	return nil
+	defer func() { cleanupStagedDownloads(root, []stagedDownloadedFile{staged}) }()
+	return publishStagedDownloads(root, []stagedDownloadedFile{staged}, force)
 }
 
 func rejectSymlinkComponents(root *os.Root, directory string) error {

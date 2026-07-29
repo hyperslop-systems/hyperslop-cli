@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pkg/errors"
 )
@@ -174,8 +175,9 @@ func ValidateTokenName(name string) error {
 	if trimmed == "" {
 		return errors.New("a token name is required: it is how you will recognise it later")
 	}
-	if len(trimmed) > 100 {
-		return errors.Errorf("token name is %d characters, maximum 100", len(trimmed))
+	characterCount := utf8.RuneCountInString(trimmed)
+	if characterCount > 100 {
+		return errors.Errorf("token name is %d characters, maximum 100", characterCount)
 	}
 	if strings.ContainsAny(trimmed, "\n\r\t") {
 		return errors.New("a token name must be a single line")
