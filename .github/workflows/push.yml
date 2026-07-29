@@ -30,3 +30,12 @@ jobs:
       -
         name: Run unit tests
         run: go test ./...
+      -
+        name: Verify hyperslop-cli never imports go-go-datadrop (no import cycle)
+        run: |
+          if go list -deps ./... 2>/dev/null | grep -q '^github.com/go-go-golems/go-go-datadrop'; then
+            echo "FAIL: hyperslop-cli depends on go-go-golems/go-go-datadrop (import cycle with the server)"
+            go list -deps ./... | grep '^github.com/go-go-golems/go-go-datadrop'
+            exit 1
+          fi
+          echo "OK: hyperslop-cli has no dependency on go-go-golems/go-go-datadrop"
