@@ -58,51 +58,6 @@ func BuildCobraCommand(command cmds.Command) (*cobra.Command, error) {
 	return cobraCmd, nil
 }
 
-// buildOperatorCommand is BuildCobraCommand without env loading, for the two
-// verbs that run the server rather than talk to one.
-//
-// `serve` and `healthcheck` must not read DATADROP_* through the section
-// machinery, and the reason is a name that means two different things.
-// DATADROP_ADDR is the client's "which server do I talk to"; `serve --addr` is
-// "which socket do I bind". With AppName set, the env source would map
-// DATADROP_ADDR onto serve's addr field, so a user with the ordinary client
-// environment exported would find `datadrop serve` trying to listen on
-// "http://localhost:8080". Before this ticket the collision was hidden by
-// cobra's shadowing: serve's local --addr simply won.
-//
-// These two keep their environment fallbacks the way they always had them, in
-// the field defaults via envOr, which reads the variable each verb actually
-// means: DATADROP_AUTH, DATADROP_EXTERNAL_URL, DATADROP_OIDC_*,
-// DATADROP_HEALTH_URL.
-func buildOperatorCommand(command cmds.Command) (*cobra.Command, error) {
-	cobraCmd, err := cli.BuildCobraCommandFromCommand(
-		WithExitCodes(command),
-		cli.WithParserConfig(cli.CobraParserConfig{
-			ShortHelpSections: []string{schema.DefaultSlug},
-		}),
-	)
-	if err != nil {
-		return nil, errors.Wrapf(err, "building the %s command", command.Description().Name)
-	}
-	return cobraCmd, nil
-}
-
-// addOperatorCommands attaches the verbs built by buildOperatorCommand.
-func addOperatorCommands(parent *cobra.Command, builders ...Builder) error {
-	for _, build := range builders {
-		command, err := build()
-		if err != nil {
-			return err
-		}
-		cobraCmd, err := buildOperatorCommand(command)
-		if err != nil {
-			return err
-		}
-		parent.AddCommand(cobraCmd)
-	}
-	return nil
-}
-
 // AddCommands builds each command and attaches it to parent.
 //
 // This is the only thing a group's root.go has to do, and it is why no verb
