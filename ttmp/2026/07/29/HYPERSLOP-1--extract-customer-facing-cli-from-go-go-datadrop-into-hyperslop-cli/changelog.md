@@ -119,3 +119,13 @@ Fourth PR #1 review found six valid issues (1 P1, 5 P2). Fixed all in hyperslop-
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/exit.go — Preserves successful buffered rows before coded command failure
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/tabular/rows.go — Format-accurate bounded CSV and NDJSON parsing
 
+
+## 2026-07-29
+
+Fifth PR #1 review found seven issues (2 P1, 5 P2). Fixed systemically in 4abebf3 with a lossless JSON document boundary, stable upload snapshots, centralized command-mode validation, and pre-request GC bounds. Documented why protobuf helps known Go/TS DTOs but not arbitrary JSON and is deferred from v1 remediation.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/client/datasets.go — Stable content-addressed upload boundary
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/jsondoc/jsondoc.go — Shared exact-number JSON boundary
+

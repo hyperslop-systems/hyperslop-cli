@@ -31,8 +31,12 @@ RelatedFiles:
       Note: customer usage exit-code boundary
     - Path: repo://pkg/client/client.go
       Note: HTTP status-preserving append behavior
+    - Path: repo://pkg/jsondoc/jsondoc.go
+      Note: Systemic remedy for three numeric precision findings
     - Path: repo://pkg/tabular/flatten.go
       Note: collision-free flattened JSON paths
+    - Path: ws://go-go-datadrop/ui/src/api/client.ts
+      Note: Evidence for future cross-language schema generation assessment
 ExternalSources:
     - https://github.com/hyperslop-systems/hyperslop-cli/pull/1
 Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 30 findings across three review passes were fixed with regression tests in commits 1871472, a6c755a, 2114ac6, 0e60966, and 7647177.'
@@ -40,6 +44,7 @@ LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
 ---
+
 
 
 
@@ -177,6 +182,37 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 | 35 | P2 | NDJSON accepted concatenated and multi-line documents | Read physical lines and require exactly one valid JSON document per nonblank line; both invalid shapes and valid blank separators are tested. |
 | 36 | P2 | Explicit empty schemas were silently omitted by `omitempty` | Reject empty schema bytes before constructing the commit request; empty-file regression added. |
 
+### Fifth-review findings
+
+| # | Severity | Finding | Resolution and evidence |
+|---|---|---|---|
+| 37 | P2 | Cached dataset mounts could publish a digest from a stale pre-mutation read | Every input is copied and hashed into a private stable snapshot; cache lookup, mount, and upload use that snapshot. A test mutates the source during HEAD and verifies the captured digest is mounted. |
+| 38 | P1 | `key=value` decoding rounded large/high-precision numbers | Shared `pkg/jsondoc` uses `Decoder.UseNumber`; payload regression preserves `9007199254740993` and a 21-digit decimal. |
+| 39 | P2 | `--string` was excluded from payload presence/exclusivity checks | `pushSettings.validate` defines payload source invariants once; string-only is accepted and stdin/string is rejected. |
+| 40 | P1 | Manifest merge rounded arbitrary numbers | Manifest decoding now uses `jsondoc`; override-path regression preserves exact integer and decimal lexemes. |
+| 41 | P2 | Projected JSON documents rounded arbitrary numbers | `decodeJSON` uses `jsondoc`; schema/manifest/meta projection retains exact numbers. |
+| 42 | P2 | Follow accepted buffered non-streaming formatters | One `validateFollow` enforces both cursor and formatter invariants; only JSONL is accepted for follow. |
+| 43 | P2 | Negative GC age silently selected the server default | The client rejects negative age before issuing any request; zero retains documented default behavior. |
+
+## Systemic assessment after five review waves
+
+The fifth wave confirms four root causes rather than 43 unrelated mistakes:
+
+1. **No single arbitrary-JSON boundary.** Dynamic documents were decoded independently into `any`, inheriting float64 conversion. `pkg/jsondoc` is now the only lossless decode/re-encode boundary; an audit found remaining `json.Unmarshal` calls target concrete wire/schema types only.
+2. **Execution-mode invariants lived inside branches.** Presence, exclusivity, cursor, and formatter rules could omit one flag. Settings validators now describe complete modes before network work.
+3. **Hash and transfer referred to a mutable path.** Dataset publication now creates a private snapshot and binds digest, cache decision, and transfer to its bytes; snapshot copying also honors cancellation.
+4. **Tests emphasized happy-path shape over adversarial boundaries.** New tests exercise precision limits, source mutation between phases, incompatible flag matrices, no-request validation, and streaming formatter behavior.
+
+### Protobuf and the TypeScript UI
+
+The UI currently hand-mirrors stable REST types in `go-go-datadrop/ui/src/api/client.ts`, so schema generation would reduce Go/TypeScript drift. A protobuf migration is nevertheless deliberately **not** part of this remediation:
+
+- `google.protobuf.Struct`/`Value` stores JSON numbers as doubles and would reproduce the exact precision defect fixed here.
+- canonical proto JSON changes 64-bit integers to strings and normally exposes camelCase JSON names; replacing the v1 `encoding/json` wire path would violate this PR's compatibility contract.
+- arbitrary event payloads, manifests, and JSON Schemas must remain raw JSON documents, not protobuf `Struct`.
+
+For the existing v1 REST API, OpenAPI/JSON Schema-generated TypeScript is the lower-risk next step. Protobuf + Buf becomes worthwhile in a separate versioned API/SDK effort if Hyperslop needs several language SDKs, Connect/gRPC, and an intentional UI migration from JavaScript `number` to generated `bigint` for 64-bit values. In that design, protobuf should cover known DTOs only; raw user JSON remains an explicit opaque field/boundary.
+
 ## Additional takeover fixes
 
 - Enabled the repository dependency graph through the GitHub API. `GET /dependency-graph/sbom` now succeeds; the
@@ -196,6 +232,7 @@ Fresh after remediation:
 - workspace after first pass: `go test ./cmd/hyperslop -run TestHyperslop -count=1 -v` — pass, including the 48s real-server full path and exit 1/2/3/4/5 behavior.
 - workspace after second pass: the same real-server suite passed in 77.906s; go-go-datadrop's full standalone suite passed with its 84.173s binary package.
 - workspace after third pass: real-server suite passed in 71.309s; go-go-datadrop full standalone suite passed with its 72.264s binary package.
+- workspace after fifth pass: both complete repository suites passed (including hyperslop real-server smoke and the admin binary suite); both vet/lint/gofmt checks passed. A direct binary invocation rejects `tail --follow --format table` before network access.
 - both repositories: `golangci-lint run ./...`, `go vet ./...`, and `gofmt` — clean.
 - hyperslop-cli: logcopter check, no-reverse-dependency guard, `goreleaser check`, snapshot build, and fresh-GOBIN install — pass.
 
@@ -210,9 +247,9 @@ Fresh after remediation:
 
 ### Remaining before merge/release
 
-1. Push fourth-pass fix `8f230e1` and companion root fix `2703a73` with this documentation update.
+1. Push systemic fifth-pass fix `4abebf3` with this documentation update.
 2. Wait for all PR checks on the new head.
-3. Reply to and resolve the six fourth-review threads only after GitHub sees the fixing commit and checks pass.
+3. Reply to and resolve the seven fifth-review threads only after GitHub sees the fixing commit and checks pass.
 4. Request another fresh review; continue until a pass reports no findings.
 5. Do not tag/release from the PR branch. Phase 9 still requires merge sequencing, confirmed Homebrew/Fury destinations and release secrets, then a tagged hyperslop-cli version before removing go-go-datadrop's local replace.
 
@@ -224,6 +261,7 @@ Fresh after remediation:
 - Third-pass fix: `2114ac6`
 - Third-pass GoSec follow-up: `0e60966`
 - Fourth-pass fix: `8f230e1`
+- Fifth-pass systemic fix: `4abebf3`
 - Companion admin/server fixes: `7647177`, `2703a73`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`

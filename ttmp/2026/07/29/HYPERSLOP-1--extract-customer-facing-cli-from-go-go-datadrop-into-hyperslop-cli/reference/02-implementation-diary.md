@@ -15,8 +15,14 @@ Owners: []
 RelatedFiles:
     - Path: repo://cmd/hyperslop/smoke_test.go
       Note: Real-server buffered partial-output regression (commit 8f230e1)
+    - Path: repo://pkg/cli/events/tail.go
+      Note: Central follow execution-mode validation (commit 4abebf3)
     - Path: repo://pkg/cli/exit.go
       Note: Fourth-pass typed exit propagation and failure-path processor finalization (commit 8f230e1)
+    - Path: repo://pkg/client/datasets.go
+      Note: Stable cancellation-aware upload snapshots (commit 4abebf3)
+    - Path: repo://pkg/jsondoc/jsondoc.go
+      Note: Lossless arbitrary-JSON boundary (commit 4abebf3)
     - Path: repo://pkg/tabular/rows.go
       Note: Fourth-pass CSV truncation and strict NDJSON semantics (commit 8f230e1)
 ExternalSources: []
@@ -25,6 +31,7 @@ LastUpdated: 2026-07-29T11:31:44.983890846-04:00
 WhatFor: So the build can be reviewed, resumed, and audited against the design doc's phased plan.
 WhenToUse: Read before resuming the HYPERSLOP-1 build or reviewing a phase's correctness.
 ---
+
 
 
 # Implementation diary
@@ -901,3 +908,66 @@ The remaining fixes made truncation and NDJSON semantics format-accurate, preser
 ### Technical details
 - Fourth review head: `fbc09f0`; six comments `3677354459`, `3677354467`, `3677354473`, `3677354481`, `3677354487`, `3677354494`.
 - Findings: 1 P1, 5 P2; all accepted and fixed.
+
+## Step 13: Replace Fifth-Wave Patches with Boundary Invariants
+
+The fifth review's seven findings shared systemic causes: lossy arbitrary-JSON decoding, incomplete execution-mode validation, and hashing a mutable path rather than captured bytes. I introduced one lossless JSON boundary, centralized push/follow invariants, and bound dataset cache/upload decisions to private stable snapshots.
+
+I also assessed protobuf for the TypeScript UI. It can eliminate manual DTO drift in a versioned follow-up, but protobuf `Struct` is itself float64-based and canonical proto JSON would change the v1 wire contract. For this PR, lossless raw JSON plus existing typed wire structs is the correct boundary.
+
+### Prompt Context
+
+**User prompt (verbatim):** "OMG still so many review issues. Is this something that maybe needs to be addressed at a more systemic level? https://github.com/hyperslop-systems/hyperslop-cli/pull/1"
+
+**Follow-up prompt (verbatim):** "will the protobuf help us wrt to the UI, or are we just overengineering it? also, does the new json package for golang solve the issue / allow us to solve the issue?"
+
+**Assistant interpretation:** Fix the seven findings by removing their common failure modes, and decide whether protobuf belongs in this remediation.
+
+**Inferred user intent:** Stop repeated review whack-a-mole and establish enforceable data/input boundaries without overengineering the extraction.
+
+**Commit (code):** `4abebf3` — "fix(cli): enforce systemic input and JSON invariants"
+
+### What I did
+- Added `pkg/jsondoc` with `Decoder.UseNumber` and exactly-one-document decoding; audited every dynamic production decode.
+- Routed payload fields, manifests, projections, flattening, and manifest probes through the lossless boundary.
+- Centralized push source and tail follow/formatter validation.
+- Snapshot/hash dataset inputs into private temporary files before cache lookup or upload; made copying cancellation-aware.
+- Rejected negative GC ages before any request and added adversarial regressions for all seven findings.
+
+### Why
+- Shared boundaries prevent the same defect from recurring at the next call site.
+- Protobuf `Struct` would not preserve arbitrary JSON numbers, and protojson would break current v1 JSON semantics.
+
+### What worked
+- Full tests, vet, lint, and gofmt passed in both repositories; hyperslop's workspace suite included real-server smoke.
+- A direct binary check rejected `tail --follow --format table` before network access.
+- Source-mutation and exact-number regressions pass.
+
+### What didn't work
+- Initial exact-JSON tests compared object byte order and failed when `encoding/json` sorted keys: `round trip = {"decimal":0.123456789012345678901,"integer":9007199254740993}, want {"integer":9007199254740993,"decimal":0.123456789012345678901}`. Changed them to assert exact numeric lexemes.
+- The first tail test used a loop variable named `settings`, shadowing the Glazed package: `settings.OutputJSONL undefined (type rangeSettings has no field or method OutputJSONL)`. Renamed the variable.
+- `nonamedreturns` rejected the first snapshot cleanup signature; replaced the named error with an explicit keep flag.
+
+### What I learned
+- Cross-language schema generation helps known DTOs, not opaque JSON documents.
+- Stable content addressing requires digest and transfer to reference captured bytes, not a pathname.
+
+### What was tricky to build
+- Snapshot cleanup must cover copy/sync/close/network failures without retaining large temporary files; each file is removed by the per-file operation.
+- Follow validation needs the structured-output section as well as default command settings.
+
+### What warrants a second pair of eyes
+- Review temporary-disk capacity expectations for very large uploads.
+- Decide separately whether v1 should generate TS types from OpenAPI/JSON Schema or a future v2 should adopt protobuf/Buf.
+
+### What should be done in the future
+- Push, resolve the seven threads, and request review; stop per user instruction.
+- Keep protobuf out of this PR and open a separate versioned API/UI schema effort if desired.
+
+### Code review instructions
+- Start at `pkg/jsondoc/jsondoc.go`, `pkg/client/datasets.go`, `pkg/cli/drops/push.go`, and `pkg/cli/events/tail.go`.
+- Run both complete repository suites plus lint/vet/gofmt.
+
+### Technical details
+- Fifth review head: `9659686`; comments `3677701638`, `3677701646`, `3677701648`, `3677701650`, `3677701654`, `3677701661`, `3677701668`.
+- Findings: 2 P1, 5 P2; all accepted and fixed systemically.
