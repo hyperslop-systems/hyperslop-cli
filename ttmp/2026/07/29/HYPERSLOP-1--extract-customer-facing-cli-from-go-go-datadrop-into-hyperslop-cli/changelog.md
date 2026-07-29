@@ -139,3 +139,13 @@ Sixth PR #1 review found six valid findings (1 P1, 5 P2). Fixed all in c72f6e6: 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — Atomic multi-file download publication
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/client/datasets.go — Input boundary for destructive import
 
+
+## 2026-07-29
+
+Phase 9 partial release: merged main now has customer README quickstart and repaired secret/release workflows; v0.1.0 tag resolves through proxy.golang.org. GitHub binary artifact release is blocked by missing GORELEASER_KEY; standalone admin pin is prepared in go-go-datadrop PR #10 and awaits merge.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/.github/workflows/release.yaml — Release workflow configuration
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/README.md — Real-server customer exercise
+

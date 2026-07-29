@@ -13,6 +13,10 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: repo://.github/workflows/release.yaml
+      Note: Phase 9 tag workflow repaired before v0.1.0 retag (commit bb5ddc8)
+    - Path: repo://README.md
+      Note: Customer-facing real-server Hyperslop exercise (commit eadd9b6)
     - Path: repo://cmd/hyperslop/smoke_test.go
       Note: Real-server buffered partial-output regression (commit 8f230e1)
     - Path: repo://pkg/cli/dataset/get.go
@@ -31,12 +35,15 @@ RelatedFiles:
       Note: Lossless arbitrary-JSON boundary (commit 4abebf3)
     - Path: repo://pkg/tabular/rows.go
       Note: Fourth-pass CSV truncation and strict NDJSON semantics (commit 8f230e1)
+    - Path: ws://release-hyperslop-v0.1.0/go.mod
+      Note: Standalone v0.1.0 pin prepared in Datadrop PR 10
 ExternalSources: []
 Summary: 'Step-by-step implementation diary for building the HYPERSLOP-1 extraction: moving the customer-facing CLI out of go-go-datadrop into hyperslop-cli. Records what changed, why, commands run, failures verbatim, and commit hashes per phase.'
 LastUpdated: 2026-07-29T11:31:44.983890846-04:00
 WhatFor: So the build can be reviewed, resumed, and audited against the design doc's phased plan.
 WhenToUse: Read before resuming the HYPERSLOP-1 build or reviewing a phase's correctness.
 ---
+
 
 
 
@@ -1036,3 +1043,75 @@ The remaining changes make side-effecting numeric bounds explicit, preserve lite
 ### Technical details
 - Sixth review head: `98faa25`; comments `3677882000`, `3677882006`, `3677882009`, `3677882017`, `3677882021`, `3677882026`.
 - Findings: 1 P1, 5 P2; all accepted and fixed.
+
+## Step 15: Publish the Go Module and Add a Real-Server User Quickstart
+
+With PR #1 merged into `upstream/main`, I replaced the scaffold README with a customer-facing Hyperslop guide. It installs the released CLI, starts the documented local Datadrop/ZITADEL stack, pairs by device authorization, and exercises drops, streaming, schemas, and datasets against the real service. The guide deliberately contains no administrative-binary or internal command-sharing discussion.
+
+I validated the merged source with standalone tests, vet, lint, logcopter, a GoReleaser snapshot build, and the real-server Hyperslop smoke suite. I then tagged `v0.1.0`; `proxy.golang.org` resolves the immutable module to the tagged commit. The GitHub binary release workflow remains blocked because the repository does not have the required `GORELEASER_KEY` secret, so it produced no GitHub release or downloadable binary assets. The companion pinning change is prepared and independently verified in PR #10.
+
+### Prompt Context
+
+**User prompt (verbatim):** "we rebased on origin/main, so maybe we can now also publish our first version of this, and set up a README to actually exercise the CLI against the real server."
+
+**Assistant interpretation:** Publish the first release from merged main, add a customer-facing real-server README exercise, and complete release pinning where external release infrastructure permits.
+
+**Inferred user intent:** Make Hyperslop usable by an external customer rather than leaving the extraction as an internal branch artifact.
+
+**Commit (README):** `eadd9b6` — "docs: add real-server Hyperslop quickstart"
+
+**Commit (security CI):** `cb1d645` — "ci: scan pushed commit range for secrets"
+
+**Commit (release workflow):** `bb5ddc8` — "ci: remove disabled docs publishing template from release"
+
+**Tag:** `v0.1.0` — points to `bb5ddc8c7ecf82fb83aabb6a812764c415b2f4e6`
+
+**Companion pin PR:** `go-go-golems/go-go-datadrop#10`, commit `58a824b`
+
+### What I did
+- Replaced the scaffold README with an install guide and an actual local server/device-pairing exercise.
+- Verified `devctl`’s `dev-stack` plan starts real ZITADEL and a real Go server on port 8080.
+- Ran standalone full tests, vet, lint, logcopter, GoReleaser check/snapshot, and the real-server hyperslop smoke suite.
+- Fixed a secret-scanning workflow bug that incorrectly compared `main` to `HEAD` on a main push.
+- Removed an unused disabled reusable workflow job that caused tag workflow startup failure.
+- Created, pushed, and verified `v0.1.0` through `proxy.golang.org`.
+- Updated a separate pin branch to require `hyperslop-cli v0.1.0`, removed the local replace, and passed complete standalone validation.
+
+### Why
+- The release README is a customer contract; it must use the real identity and service flow, not an unauthenticated fictional command.
+- A public Go tag is sufficient for `go install` and module pinning, but it is not a complete binary distribution without a successful artifact release.
+
+### What worked
+- All checks on `bb5ddc8` main passed: CodeQL, Dependency Scanning, Secret Scanning, golangci-lint, and the Go pipeline.
+- `GOPROXY=https://proxy.golang.org go list -m -json github.com/hyperslop-systems/hyperslop-cli@v0.1.0` resolved version, timestamp, checksum, and tag commit.
+- The pin branch passed `GOWORK=off go build ./...`, `go test ./... -count=1`, `go vet ./...`, `golangci-lint run ./...`, and `make logcopter-check`.
+
+### What didn't work
+- The initial tag workflow failed before any job because GitHub Actions resolved a disabled reusable `publish-docs` template. The tag was deleted before publication artifacts existed, the template job was removed, main checks passed, and the tag was recreated at the fixed workflow commit.
+- The recreated tag workflow reached GoReleaser but both Linux and Darwin jobs failed exactly with: `missing GoReleaser Pro key, please provide one with --key or using the GORELEASER_KEY environment variable`. The action log showed `GORELEASER_KEY:` empty. No GitHub release was created.
+
+### What I learned
+- GitHub Actions validates/resolves a reusable-workflow job even when its `if` guard is constant false; leaving an unavailable template reference can prevent all tag jobs from starting.
+- The Go module proxy publishes from a valid semantic tag independently of GitHub release assets.
+
+### What was tricky to build
+- The initial source README was a template, not stale product documentation. The replacement had to distinguish safe customer instructions from internal architecture and make device authorization’s stdout/stderr behavior explicit so command substitution captures only the one-time token.
+- Retagging is normally avoided. Here it was limited to a first tag whose initial workflow had startup-failed before GoReleaser or proxy verification; the final public tag points at the CI-validated release workflow revision.
+
+### What warrants a second pair of eyes
+- Provision repository/organization secret `GORELEASER_KEY`, then rerun the existing `v0.1.0` tag workflow or perform a consciously versioned binary-release remediation. Confirm GPG, Homebrew, and Fury secrets/destinations before retrying.
+- Review and merge PR #10 before declaring Phase 9 completely finished.
+
+### What should be done in the future
+- Do not mark Phase 9 complete until `v0.1.0` has a successful GitHub binary release and PR #10 is merged.
+- After release secrets are configured, rerun a tag release and verify the GitHub release assets, Homebrew publication, and Fury packages.
+
+### Code review instructions
+- Read `README.md` as a new customer; execute the dev-stack and device pairing path against a real local service.
+- Review `.github/workflows/secret-scanning.yml` event-specific revision selection and `.github/workflows/release.yaml` for tag workflow dependencies.
+- Review PR #10’s two-file module pin diff and its standalone validation.
+
+### Technical details
+- Main release commits: `eadd9b6`, `cb1d645`, `bb5ddc8`.
+- Failed tag workflow: `30494503254`; failure reason: missing `GORELEASER_KEY`.
+- Module checksum: `h1:PAcSlMw5HVkbHvfJtBNP0RNH0CeugQJi1xDrmp5iNpo=`.
