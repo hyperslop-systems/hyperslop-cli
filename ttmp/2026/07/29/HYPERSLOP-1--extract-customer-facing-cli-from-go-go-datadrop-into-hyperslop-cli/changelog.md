@@ -49,3 +49,12 @@ Phases 4-8 complete: command groups + customer help moved to hyperslop-cli (devi
 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/cmd/hyperslop/smoke_test.go — hyperslop e2e against the real datadrop server
 
+
+## 2026-07-29
+
+Phase 8 expanded: hyperslop smoke test now runs the full authenticated path (create/push/query/tail/export/schema/dataset/whoami) + exit-code contract (3/4/5) via hyperslop against the real datadrop server, seeding a token through a workspace 'go run' seeder. All hyperslop smoke tests PASS; server tests skip under GOWORK=off. Commit hyperslop-cli dbb39e3. Phases 0-8 of the extraction are complete and verified; Phase 9 (publish) remains blocked on push/tag/proxy access.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/cmd/hyperslop/smoke_test.go — full hyperslop authenticated e2e against the real datadrop server
+

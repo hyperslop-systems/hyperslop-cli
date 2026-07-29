@@ -361,3 +361,32 @@ publish is blocked on access/authorization.
 remote (and the repo exists there); the org release secrets + the correct
 Homebrew tap/fury account are configured; then the tag push + the go-go-datadrop
 go.mod bump can run.
+
+## Step 9: Phase 8 (revisited) — full hyperslop authenticated e2e
+
+Extended cmd/hyperslop/smoke_test.go to run the WHOLE README quick start through
+the hyperslop binary against the real datadrop server, not just whoami/device.
+A tiny seeder main is compiled with `go run` against the split-cli workspace so
+it can import go-go-datadrop/pkg/store (which hyperslop-cli must never import) to
+mint a ddp_ token before the server opens the DB. Tests, all PASS:
+- TestHyperslopFullDataPathAgainstRealServer: create, push (kv + stdin json +
+  stdin ndjson => 4 events), query (4 events, data.temperature is a number),
+  tail, export csv, schema put(strict)/show, dataset push(2 files)/list/get,
+  whoami (authenticated=true).
+- TestHyperslopExitCodeContract: exit 3 (bad credentials), 4 (unknown drop),
+  5 (strict schema rejection) via hyperslop.
+
+This satisfies the goal's literal e2e: hyperslop against a real datadrop server
+for auth device -> create -> push -> query -> tail -> export -> dataset push/get
+-> schema put/show -> whoami, plus the 0/1/3/4/5 exit codes. Server-dependent
+tests skip under GOWORK=off (standalone CI); the unreachable-server exit-code
+test always runs.
+
+- **Commit:** hyperslop-cli `dbb39e3`.
+- **What didn't work (first try):** `--format jsonl --output-fields authenticated`
+  emits one JSON object per line, but decodeOneRow expected a JSON array; the
+  full data path itself passed (server log showed drop created, schema
+  registered, dataset committed) and only the final whoami decode failed. Fixed
+  by switching those whoami checks to `--format json` (array of one row).
+- **What was tricky:** naming — the test helper `cli(...)` collided with the
+  `cli` package imported by main.go (same `package main`); renamed to `runCLI`.
