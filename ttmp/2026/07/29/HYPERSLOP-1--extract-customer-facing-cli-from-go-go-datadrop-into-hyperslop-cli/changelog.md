@@ -149,3 +149,13 @@ Phase 9 partial release: merged main now has customer README quickstart and repa
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/.github/workflows/release.yaml — Release workflow configuration
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/README.md — Real-server customer exercise
 
+
+## 2026-07-29
+
+Phase 9 update: v0.1.0 is available through proxy.golang.org and verified by go install; go-go-datadrop PR #10 merged, pinning v0.1.0 without a local replace. GitHub binary artifact release remains blocked solely on missing GORELEASER_KEY in the release workflow.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/README.md — Published module customer quickstart
+- /home/manuel/workspaces/2026-07-29/split-cli/release-hyperslop-v0.1.0/go.mod — Merged published-module pin evidence
+

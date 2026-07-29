@@ -1048,7 +1048,7 @@ The remaining changes make side-effecting numeric bounds explicit, preserve lite
 
 With PR #1 merged into `upstream/main`, I replaced the scaffold README with a customer-facing Hyperslop guide. It installs the released CLI, starts the documented local Datadrop/ZITADEL stack, pairs by device authorization, and exercises drops, streaming, schemas, and datasets against the real service. The guide deliberately contains no administrative-binary or internal command-sharing discussion.
 
-I validated the merged source with standalone tests, vet, lint, logcopter, a GoReleaser snapshot build, and the real-server Hyperslop smoke suite. I then tagged `v0.1.0`; `proxy.golang.org` resolves the immutable module to the tagged commit. The GitHub binary release workflow remains blocked because the repository does not have the required `GORELEASER_KEY` secret, so it produced no GitHub release or downloadable binary assets. The companion pinning change is prepared and independently verified in PR #10.
+I validated the merged source with standalone tests, vet, lint, logcopter, a GoReleaser snapshot build, and the real-server Hyperslop smoke suite. I then tagged `v0.1.0`; `proxy.golang.org` resolves the immutable module to the tagged commit and `go install` produces a working binary. The GitHub binary release workflow remains blocked because the repository does not have the required `GORELEASER_KEY` secret, so it produced no GitHub release or downloadable binary assets. The companion pinning change was independently verified and merged in PR #10.
 
 ### Prompt Context
 
@@ -1066,7 +1066,7 @@ I validated the merged source with standalone tests, vet, lint, logcopter, a GoR
 
 **Tag:** `v0.1.0` — points to `bb5ddc8c7ecf82fb83aabb6a812764c415b2f4e6`
 
-**Companion pin PR:** `go-go-golems/go-go-datadrop#10`, commit `58a824b`
+**Companion pin merge:** `go-go-golems/go-go-datadrop#10`, merge commit `569dd1f` (pin commit `58a824b`)
 
 ### What I did
 - Replaced the scaffold README with an install guide and an actual local server/device-pairing exercise.
@@ -1075,7 +1075,7 @@ I validated the merged source with standalone tests, vet, lint, logcopter, a GoR
 - Fixed a secret-scanning workflow bug that incorrectly compared `main` to `HEAD` on a main push.
 - Removed an unused disabled reusable workflow job that caused tag workflow startup failure.
 - Created, pushed, and verified `v0.1.0` through `proxy.golang.org`.
-- Updated a separate pin branch to require `hyperslop-cli v0.1.0`, removed the local replace, and passed complete standalone validation.
+- Updated and merged the pin branch to require `hyperslop-cli v0.1.0`, removed the local replace, and passed complete standalone validation.
 
 ### Why
 - The release README is a customer contract; it must use the real identity and service flow, not an unauthenticated fictional command.
@@ -1084,7 +1084,8 @@ I validated the merged source with standalone tests, vet, lint, logcopter, a GoR
 ### What worked
 - All checks on `bb5ddc8` main passed: CodeQL, Dependency Scanning, Secret Scanning, golangci-lint, and the Go pipeline.
 - `GOPROXY=https://proxy.golang.org go list -m -json github.com/hyperslop-systems/hyperslop-cli@v0.1.0` resolved version, timestamp, checksum, and tag commit.
-- The pin branch passed `GOWORK=off go build ./...`, `go test ./... -count=1`, `go vet ./...`, `golangci-lint run ./...`, and `make logcopter-check`.
+- The pin branch passed `GOWORK=off go build ./...`, `go test ./... -count=1`, `go vet ./...`, `golangci-lint run ./...`, and `make logcopter-check`; merged main now requires `hyperslop-cli v0.1.0` with no local replace.
+- `GOBIN=/tmp/hyperslop-v0.1.0-bin GOPROXY=https://proxy.golang.org go install github.com/hyperslop-systems/hyperslop-cli/cmd/hyperslop@v0.1.0` installed the published binary, whose `--help` executed successfully.
 
 ### What didn't work
 - The initial tag workflow failed before any job because GitHub Actions resolved a disabled reusable `publish-docs` template. The tag was deleted before publication artifacts existed, the template job was removed, main checks passed, and the tag was recreated at the fixed workflow commit.
@@ -1100,16 +1101,16 @@ I validated the merged source with standalone tests, vet, lint, logcopter, a GoR
 
 ### What warrants a second pair of eyes
 - Provision repository/organization secret `GORELEASER_KEY`, then rerun the existing `v0.1.0` tag workflow or perform a consciously versioned binary-release remediation. Confirm GPG, Homebrew, and Fury secrets/destinations before retrying.
-- Review and merge PR #10 before declaring Phase 9 completely finished.
+- PR #10 is merged; provision the release secret and a successful binary artifact release before declaring Phase 9 completely finished.
 
 ### What should be done in the future
-- Do not mark Phase 9 complete until `v0.1.0` has a successful GitHub binary release and PR #10 is merged.
+- Do not mark Phase 9 complete until `v0.1.0` has a successful GitHub binary release; PR #10 is merged.
 - After release secrets are configured, rerun a tag release and verify the GitHub release assets, Homebrew publication, and Fury packages.
 
 ### Code review instructions
 - Read `README.md` as a new customer; execute the dev-stack and device pairing path against a real local service.
 - Review `.github/workflows/secret-scanning.yml` event-specific revision selection and `.github/workflows/release.yaml` for tag workflow dependencies.
-- Review PR #10’s two-file module pin diff and its standalone validation.
+- Verify `go install github.com/hyperslop-systems/hyperslop-cli/cmd/hyperslop@v0.1.0` and inspect merged Datadrop PR #10’s module pin.
 
 ### Technical details
 - Main release commits: `eadd9b6`, `cb1d645`, `bb5ddc8`.
