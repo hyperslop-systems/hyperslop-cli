@@ -240,6 +240,9 @@ func buildCommitRequest(s *pushSettings) (datadrop.CommitVersionRequest, error) 
 		if err != nil {
 			return datadrop.CommitVersionRequest{}, err
 		}
+		if len(strings.TrimSpace(string(spec))) == 0 {
+			return datadrop.CommitVersionRequest{}, errors.Errorf("schema %s is empty", s.Schema)
+		}
 		req.Schema = spec
 	}
 	return req, nil

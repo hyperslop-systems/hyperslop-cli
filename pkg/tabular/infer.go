@@ -2,6 +2,7 @@ package tabular
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
@@ -119,28 +120,28 @@ func (c *columnStats) observe(value any) {
 		if isInstant(typed) {
 			c.temporals++
 		}
-		c.track(typed)
+		c.track("string\x00" + typed)
 		return
 	case json.Number:
 		c.numbers++
-		c.track(typed.String())
+		c.track("number\x00" + typed.String())
 		return
 	case float64:
 		c.numbers++
-		c.track(formatFloat(typed))
+		c.track("number\x00" + formatFloat(typed))
 		return
 	case bool:
 		c.bools++
 		if typed {
-			c.track("true")
+			c.track("bool\x00true")
 		} else {
-			c.track("false")
+			c.track("bool\x00false")
 		}
 		return
 	default:
 		c.others++
 		if encoded, err := json.Marshal(typed); err == nil {
-			c.track(string(encoded))
+			c.track(fmt.Sprintf("%T\x00%s", typed, encoded))
 		}
 	}
 }

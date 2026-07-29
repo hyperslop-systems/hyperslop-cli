@@ -470,6 +470,24 @@ func TestFromRowsTruncates(t *testing.T) {
 	}
 }
 
+func TestFromRowsCountsWhitespaceOnlyCSVRecordPastCap(t *testing.T) {
+	table, err := FromRows(SourceRef{}, strings.NewReader("v\n1\n \t \n"), FormatCSV, 1, nil)
+	if err != nil {
+		t.Fatalf("FromRows: %v", err)
+	}
+	if !table.Truncated || table.RowCount != 1 {
+		t.Fatalf("table = %+v, want one-row truncated sample", table)
+	}
+
+	complete, err := FromRows(SourceRef{}, strings.NewReader("v\n1\n\n\r\n"), FormatCSV, 1, nil)
+	if err != nil {
+		t.Fatalf("FromRows with blank suffix: %v", err)
+	}
+	if complete.Truncated {
+		t.Fatal("physically blank CSV lines were counted as records")
+	}
+}
+
 func TestFromRowsStopsBeforeDecodingMalformedRecordPastCap(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -518,6 +536,27 @@ func TestFromRowsRejectsUnterminatedOrTrailingJSONArrayData(t *testing.T) {
 				t.Fatalf("FromRows accepted %q", input)
 			}
 		})
+	}
+}
+
+func TestReadNDJSONRequiresExactlyOneDocumentPerLine(t *testing.T) {
+	for name, input := range map[string]string{
+		"concatenated":   `{"a":1}{"a":2}`,
+		"pretty printed": "{\n  \"a\": 1\n}\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := FromRows(SourceRef{}, strings.NewReader(input), FormatNDJSON, 10, nil); err == nil {
+				t.Fatalf("NDJSON accepted %s input", name)
+			}
+		})
+	}
+
+	table, err := FromRows(SourceRef{}, strings.NewReader("{\"a\":1}\n\n  \n{\"a\":2}\n"), FormatNDJSON, 10, nil)
+	if err != nil {
+		t.Fatalf("valid NDJSON: %v", err)
+	}
+	if table.RowCount != 2 {
+		t.Fatalf("RowCount = %d, want 2 nonblank lines", table.RowCount)
 	}
 }
 
@@ -696,6 +735,21 @@ func TestClampRows(t *testing.T) {
 		if got := ClampRows(input); got != want {
 			t.Errorf("ClampRows(%d) = %d, want %d", input, got, want)
 		}
+	}
+}
+
+func TestDistinctCountsIncludeValueType(t *testing.T) {
+	rows := "{\"v\":\"1\"}\n{\"v\":1}\n{\"v\":\"true\"}\n{\"v\":true}\n"
+	table, err := FromRows(SourceRef{}, strings.NewReader(rows), FormatNDJSON, 10, nil)
+	if err != nil {
+		t.Fatalf("FromRows: %v", err)
+	}
+	field, ok := table.Field("v")
+	if !ok {
+		t.Fatal("field v is missing")
+	}
+	if field.Distinct != 4 {
+		t.Fatalf("Distinct = %d, want 4 typed values", field.Distinct)
 	}
 }
 

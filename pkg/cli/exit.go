@@ -2,10 +2,8 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
@@ -17,38 +15,12 @@ import (
 
 // The exit-code contract, and why it needs a helper at all.
 //
-// pkg/cli/root.go documents five exit codes and cmd/datadrop/smoke_test.go
-// asserts them, because a script branches on *why* a command failed rather than
-// parsing stderr. Before this ticket, Execute() owned the mapping: cobra
-// returned the error, Execute() called exitCodeFor and returned the code to
-// main.
-//
-// Glazed's cobra builder takes that away. Verified against glazed v1.3.8, which
-// is what go.mod pins:
-//
-//	// glazed@v1.3.8/pkg/cli/cobra.go:48
-//	cmd.Run = func(cmd *cobra.Command, args []string) {
-//	    ...
-//	    err = runFunc(ctx, parsedValues)
-//	    if _, ok := err.(*cmds.ExitWithoutGlazeError); ok {
-//	        os.Exit(0)
-//	    }
-//	    cobra.CheckErr(err)   // <- prints "Error: ..." and os.Exit(1)
-//	}
-//
-// It sets cmd.Run, not cmd.RunE. The error never reaches root.Execute(), so
-// Execute() never sees it, cobra.CheckErr exits 1 for everything, and the
-// message prefix silently changes from "datadrop: " to "Error: ".
-// commandBuildConfig has five fields and none of them is an error hook, so
-// there is no option to change this from the outside.
-// Upstream: https://github.com/go-go-golems/glazed/issues/611
-//
-// The local answer is ExitOn: map the error, print it with the binary's own
-// prefix, and exit before returning — so cobra.CheckErr is never reached on an
-// error path. Rather than threading `return ExitOn(err)` through every error
-// site in nineteen verbs (which is the failure mode where one forgotten call
-// site loses the mapping for one verb, and looks like it works), the mapping is
-// applied once per command by WithExitCodes at registration time.
+// Glazed v1.4.1 propagates command errors through Cobra RunE, so the binary root
+// owns diagnostics and process exit. The wrapper here adds two pieces Cobra
+// does not know: the stable 1/3/4/5 code carried by codedExitError, and Glaze
+// processor finalization when a row-producing command fails after emitting
+// successful rows. Immediate os.Exit is forbidden here: it bypasses deferred
+// formatter cleanup and can hide already-completed writes from JSON/table output.
 
 // ExitCode values are part of the CLI contract. Scripts depend on them, so they
 // must not be renumbered.
@@ -73,39 +45,50 @@ func SetErrorPrefix(prefix string) { errorPrefix = prefix }
 // ErrorPrefix returns the configured diagnostic prefix.
 func ErrorPrefix() string { return errorPrefix }
 
-// exitFunc is os.Exit, indirected so a test can observe the code instead of
-// killing the test binary.
-var exitFunc = os.Exit
+type codedExitError struct {
+	cause error
+	code  int
+}
 
-// errSink is where ExitOn writes. Indirected for the same reason.
-var errSink io.Writer = os.Stderr
+func (e *codedExitError) Error() string { return e.cause.Error() }
+func (e *codedExitError) Unwrap() error { return e.cause }
 
-// ExitOn maps err onto the documented exit codes, reports it, and exits.
-//
-// It returns an error only for the signals that must be handed back untouched:
-// nil and *cmds.ExitWithoutGlazeError, which glazed's builder interprets as
-// "exit 0". A command-specific long-running loop such as tail --follow may
-// convert its own intentional cancellation to nil; cancellation of finite work
-// remains a failure because its output may be incomplete.
-// Everything else terminates the process here, which is the point.
+// ExitOn annotates err with its stable exit code and returns it to Cobra. It
+// never prints or exits; the binary root does that only after Glazed has had a
+// chance to finalize buffered output.
 func ExitOn(err error) error {
 	if err == nil {
 		return nil
 	}
-
 	var exitWithoutGlaze *cmds.ExitWithoutGlazeError
 	if errors.As(err, &exitWithoutGlaze) {
 		return err
 	}
+	var alreadyCoded *codedExitError
+	if errors.As(err, &alreadyCoded) {
+		return err
+	}
+	return &codedExitError{cause: err, code: ExitCodeFor(err)}
+}
 
-	_, _ = fmt.Fprintln(errSink, ErrorPrefix()+err.Error())
-	exitFunc(ExitCodeFor(err))
-	return nil // unreachable in production; reachable when exitFunc is stubbed
+// IsCommandError reports whether a wrapped command (rather than Cobra's own
+// argument/flag traversal) produced err. Binary roots use this to distinguish
+// generic command failure 1 from invocation usage failure 2.
+func IsCommandError(err error) bool {
+	var coded *codedExitError
+	return errors.As(err, &coded)
 }
 
 // ExitCodeFor maps an error onto the documented exit codes, so a script can
 // branch on why a command failed without parsing its stderr.
 func ExitCodeFor(err error) int {
+	if err == nil {
+		return ExitOK
+	}
+	var coded *codedExitError
+	if errors.As(err, &coded) {
+		return coded.code
+	}
 	var apiErr *client.APIError
 	if errors.As(err, &apiErr) {
 		switch apiErr.Status {
@@ -121,12 +104,9 @@ func ExitCodeFor(err error) int {
 	return ExitError
 }
 
-// WithExitCodes wraps a Glazed command so that every error it returns goes
-// through ExitOn.
-//
-// This is the whole exit-code fix, applied in one place per command instead of
-// at every `return err`. A verb body stays ordinary Go: it returns errors and
-// never mentions os.Exit.
+// WithExitCodes wraps each command once so verb bodies return ordinary errors.
+// Glaze commands additionally close their processor on failure, preserving
+// successful rows emitted before a later input/API error.
 func WithExitCodes(command cmds.Command) cmds.Command {
 	switch typed := command.(type) {
 	case cmds.GlazeCommand:
@@ -149,7 +129,21 @@ var _ cmds.GlazeCommand = &exitCodeGlazeCommand{}
 func (c *exitCodeGlazeCommand) RunIntoGlazeProcessor(
 	ctx context.Context, vals *values.Values, gp middlewares.Processor,
 ) error {
-	return ExitOn(c.GlazeCommand.RunIntoGlazeProcessor(ctx, vals, gp))
+	err := c.GlazeCommand.RunIntoGlazeProcessor(ctx, vals, gp)
+	if err == nil {
+		return nil // Glazed's outer runner closes the processor on success.
+	}
+	var exitWithoutGlaze *cmds.ExitWithoutGlazeError
+	if errors.As(err, &exitWithoutGlaze) {
+		return err
+	}
+	// Formatting successful rows is cleanup, not command work; cancellation of
+	// the request must not suppress it. The outer runner sees the returned error
+	// and therefore will not close the processor a second time.
+	if closeErr := gp.Close(context.WithoutCancel(ctx)); closeErr != nil {
+		err = errors.Wrapf(err, "finalize partial output: %v", closeErr)
+	}
+	return ExitOn(err)
 }
 
 type exitCodeWriterCommand struct {

@@ -147,7 +147,7 @@ func ReadCSVRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, error
 	row := 0
 	for {
 		if row >= opts.MaxRows {
-			return source.hasAdditionalData(), nil
+			return source.hasAdditionalCSVRecord(), nil
 		}
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
@@ -216,20 +216,28 @@ func (r *physicalLineReader) Read(dst []byte) (int, error) {
 	return n, nil
 }
 
-func (r *physicalLineReader) hasAdditionalData() bool {
+func (r *physicalLineReader) hasAdditionalCSVRecord() bool {
+	// encoding/csv ignores physically empty lines, but spaces and tabs form a
+	// real one-field record. Scan only to the first byte other than CR/LF; do
+	// not parse the out-of-budget record.
 	for _, b := range r.pending {
-		if !isJSONWhitespace(b) {
+		if b != '\r' && b != '\n' {
 			return true
 		}
 	}
 	if r.terminalErr != nil {
 		return r.terminalErr != io.EOF
 	}
-	return hasNonWhitespace(r.reader)
-}
-
-func hasAdditionalJSONData(decoder *json.Decoder, source io.Reader) bool {
-	return hasNonWhitespace(io.MultiReader(decoder.Buffered(), source))
+	var one [1]byte
+	for {
+		n, err := r.reader.Read(one[:])
+		if n > 0 && one[0] != '\r' && one[0] != '\n' {
+			return true
+		}
+		if err != nil {
+			return err != io.EOF
+		}
+	}
 }
 
 // hasNonWhitespace intentionally treats a read error as "more data" once the
@@ -298,30 +306,42 @@ func isJSONNumber(value string) bool {
 	return json.Valid([]byte(value))
 }
 
-// ReadNDJSONRows treats each non-empty document as one payload.
+// ReadNDJSONRows treats each non-empty physical line as exactly one JSON
+// document. Concatenated documents and pretty-printed multi-line objects are
+// rejected: accepting them would make a format named newline-delimited assign
+// misleading record numbers during imports.
 func ReadNDJSONRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, error) {
-	decoder := json.NewDecoder(body)
-
+	reader := bufio.NewReader(body)
 	row := 0
 	for {
 		if row >= opts.MaxRows {
-			// decoder.Buffered holds bytes read ahead while decoding the last
-			// accepted record. Inspect only until the first non-whitespace byte;
-			// do not decode or allocate the next document.
-			return hasAdditionalJSONData(decoder, body), nil
+			// Once the sample is complete, detect only whether another nonblank
+			// record begins. Do not allocate or parse that possibly huge line.
+			return hasNonWhitespace(reader), nil
 		}
-		var payload json.RawMessage
-		err := decoder.Decode(&payload)
-		if errors.Is(err, io.EOF) {
+		line, err := reader.ReadBytes('\n')
+		if len(line) == 0 && errors.Is(err, io.EOF) {
 			return false, nil
 		}
-		if err != nil {
-			return false, errors.Wrapf(err, "decode NDJSON record %d", row+1)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return false, errors.Wrapf(err, "read NDJSON record %d", row+1)
+		}
+		trimmed := strings.TrimSpace(string(line))
+		if trimmed == "" {
+			if errors.Is(err, io.EOF) {
+				return false, nil
+			}
+			continue
+		}
+		if !json.Valid([]byte(trimmed)) {
+			return false, errors.Errorf("decode NDJSON record %d: expected exactly one JSON document on one line", row+1)
 		}
 		row++
-
-		if err := emit(row, payload); err != nil {
+		if err := emit(row, json.RawMessage(trimmed)); err != nil {
 			return false, err
+		}
+		if errors.Is(err, io.EOF) {
+			return false, nil
 		}
 	}
 }

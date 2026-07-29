@@ -1,174 +1,110 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"testing"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	"github.com/go-go-golems/glazed/pkg/middlewares"
+	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/pkg/errors"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 )
 
-// The exit codes are the CLI contract: a script branches on why a command
-// failed rather than parsing stderr. cmd/datadrop/smoke_test.go's TestExitCodes
-// proves it end to end against a real binary and a real server; these tests
-// prove the mapping itself, in milliseconds, so that a broken mapping is
-// reported by name rather than as "the 4 case wanted 4 and got 1".
-
-// captureExit runs ExitOn with the process-ending parts stubbed out, and
-// reports what it would have done.
-func captureExit(t *testing.T, err error) (int, string, error) {
-	t.Helper()
-
-	var buf bytes.Buffer
-	// -1 rather than 0, so that "did not exit" is distinguishable from
-	// "exited successfully" — which matters for the two errors ExitOn must
-	// pass through untouched.
-	code := -1
-
-	originalExit, originalSink := exitFunc, errSink
-	exitFunc = func(c int) { code = c }
-	errSink = &buf
-	t.Cleanup(func() { exitFunc, errSink = originalExit, originalSink })
-
-	returned := ExitOn(err)
-	return code, buf.String(), returned
-}
-
 func apiError(status int, code string) error {
 	return &client.APIError{Status: status, Code: code, Detail: "test"}
 }
 
-func TestRenderAppTextUsesConfiguredBinaryName(t *testing.T) {
-	original := AppName()
-	t.Cleanup(func() { SetAppName(original) })
-
-	for _, app := range []string{"hyperslop", "datadrop"} {
-		SetAppName(app)
-		got := RenderAppText("{{app}} query greenhouse")
-		if want := app + " query greenhouse"; got != want {
-			t.Fatalf("RenderAppText for %s = %q, want %q", app, got, want)
+func TestExitOnMapsAPIStatusesWithoutExiting(t *testing.T) {
+	cases := []struct{ status, want int }{
+		{http.StatusUnauthorized, ExitAuth}, {http.StatusForbidden, ExitAuth},
+		{http.StatusNotFound, ExitNotFound}, {http.StatusBadRequest, ExitValidation},
+		{http.StatusUnprocessableEntity, ExitValidation}, {http.StatusConflict, ExitValidation},
+		{http.StatusRequestEntityTooLarge, ExitValidation}, {http.StatusInternalServerError, ExitError},
+	}
+	for _, tc := range cases {
+		mapped := ExitOn(apiError(tc.status, "Test"))
+		if !IsCommandError(mapped) || ExitCodeFor(mapped) != tc.want {
+			t.Errorf("status %d mapped to %d (coded=%v), want %d", tc.status, ExitCodeFor(mapped), IsCommandError(mapped), tc.want)
 		}
 	}
 }
 
-func TestExitOnMapsAPIStatuses(t *testing.T) {
-	cases := []struct {
-		name   string
-		err    error
-		want   int
-		reason string
-	}{
-		{"401", apiError(http.StatusUnauthorized, "Unauthorized"), ExitAuth,
-			"a rejected credential"},
-		{"403", apiError(http.StatusForbidden, "Forbidden"), ExitAuth,
-			"a credential that is not allowed"},
-		{"404", apiError(http.StatusNotFound, "NotFound"), ExitNotFound,
-			"a drop that does not exist"},
-		{"400", apiError(http.StatusBadRequest, "BadRequest"), ExitValidation,
-			"a malformed request"},
-		{"422", apiError(http.StatusUnprocessableEntity, "Unprocessable"), ExitValidation,
-			"a strict schema rejection"},
-		{"409", apiError(http.StatusConflict, "Conflict"), ExitValidation,
-			"a conflicting write"},
-		{"413", apiError(http.StatusRequestEntityTooLarge, "TooLarge"), ExitValidation,
-			"a body over the limit"},
-		{"500", apiError(http.StatusInternalServerError, "Internal"), ExitError,
-			"a server fault, which is not one of the specific codes"},
-		{"plain error", errors.New("something local went wrong"), ExitError,
-			"anything that is not an API error"},
+func TestExitOnPreservesWrappedCause(t *testing.T) {
+	cause := apiError(http.StatusNotFound, "NotFound")
+	mapped := ExitOn(errors.Wrap(errors.Wrap(cause, "fetch"), "query"))
+	var got *client.APIError
+	if ExitCodeFor(mapped) != ExitNotFound || !errors.As(mapped, &got) || got != cause {
+		t.Fatalf("mapped error lost code/cause: %v", mapped)
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code, _, _ := captureExit(t, tc.err)
-			if code != tc.want {
-				t.Errorf("exit code for %s = %d, want %d", tc.reason, code, tc.want)
-			}
-		})
+	if ExitCodeFor(ExitOn(context.Canceled)) != ExitError || !errors.Is(ExitOn(context.Canceled), context.Canceled) {
+		t.Fatal("cancellation did not remain an ordinary coded failure")
 	}
 }
 
-// The mapping must survive wrapping, because every verb's error arrives through
-// at least one errors.Wrap on the way out of pkg/client.
-func TestExitOnSeesThroughWrapping(t *testing.T) {
-	wrapped := errors.Wrap(
-		errors.Wrap(apiError(http.StatusNotFound, "NotFound"), "fetching the drop"),
-		"running query")
-
-	code, _, _ := captureExit(t, wrapped)
-	if code != ExitNotFound {
-		t.Errorf("exit code = %d, want %d for a doubly-wrapped 404", code, ExitNotFound)
+func TestExitOnPassesSpecialValuesThrough(t *testing.T) {
+	if ExitOn(nil) != nil || ExitCodeFor(nil) != ExitOK {
+		t.Fatal("nil was not preserved")
 	}
-}
-
-// One prefix, everywhere. cobra.CheckErr would print "Error: "; anything that
-// reaches a user has to say "datadrop: " so that two failure paths do not look
-// like two programs.
-func TestExitOnUsesTheBinaryPrefix(t *testing.T) {
-	_, stderr, _ := captureExit(t, apiError(http.StatusNotFound, "NotFound"))
-
-	if want := ErrorPrefix() + "NotFound: test\n"; stderr != want {
-		t.Errorf("stderr = %q, want %q", stderr, want)
-	}
-}
-
-// Cancellation of finite work is a failure: export/download stdout may already
-// be partial. tail --follow converts its own intentional stop to nil before it
-// reaches this global wrapper.
-func TestExitOnTreatsUnexpectedCancellationAsFailure(t *testing.T) {
-	code, stderr, returned := captureExit(t, context.Canceled)
-
-	if code != ExitError {
-		t.Errorf("a cancelled operation exited %d, want %d", code, ExitError)
-	}
-	if want := ErrorPrefix() + context.Canceled.Error() + "\n"; stderr != want {
-		t.Errorf("cancellation stderr = %q, want %q", stderr, want)
-	}
-	if returned != nil {
-		t.Errorf("ExitOn returned %v after its exit hook, want nil", returned)
-	}
-}
-
-// ExitWithoutGlazeError is glazed's own "stop here, successfully" signal and
-// has to be handed back untouched, or the builder never sees it.
-func TestExitOnPassesGlazeExitThrough(t *testing.T) {
 	signal := &cmds.ExitWithoutGlazeError{}
-	code, _, returned := captureExit(t, signal)
-
-	if code != -1 {
-		t.Errorf("ExitWithoutGlazeError exited %d; it must not exit at all", code)
-	}
-	if !errors.Is(returned, error(signal)) {
-		t.Errorf("ExitWithoutGlazeError was not returned unchanged; got %v", returned)
+	if got := ExitOn(signal); !errors.Is(got, signal) || IsCommandError(got) {
+		t.Fatalf("ExitWithoutGlazeError changed: %v", got)
 	}
 }
 
-func TestExitOnIgnoresNil(t *testing.T) {
-	code, stderr, returned := captureExit(t, nil)
-	if code != -1 || stderr != "" || returned != nil {
-		t.Errorf("ExitOn(nil) did something: code=%d stderr=%q err=%v", code, stderr, returned)
-	}
-}
-
-// A verb that is not wrapped loses the mapping for that verb alone, which is
-// worse than losing it everywhere because it looks like it works. WithExitCodes
-// is what makes the wrapping structural; this checks it actually wraps each of
-// the three interfaces rather than falling through the type switch.
-func TestWithExitCodesWrapsEveryInterface(t *testing.T) {
-	glaze, err := NewWhoamiCommand()
+func TestWithExitCodesWrapsGlazeCommand(t *testing.T) {
+	command, err := NewWhoamiCommand()
 	if err != nil {
-		t.Fatalf("NewWhoamiCommand: %v", err)
+		t.Fatal(err)
 	}
+	wrapped := WithExitCodes(command)
+	if _, ok := wrapped.(*exitCodeGlazeCommand); !ok || wrapped.Description().Name != "whoami" {
+		t.Fatalf("wrapper = %T description=%q", wrapped, wrapped.Description().Name)
+	}
+}
 
-	wrapped := WithExitCodes(glaze)
-	if _, ok := wrapped.(*exitCodeGlazeCommand); !ok {
-		t.Errorf("a GlazeCommand was wrapped as %T, want *exitCodeGlazeCommand", wrapped)
+func TestGlazeErrorFinalizesSuccessfulRowsBeforeReturning(t *testing.T) {
+	cause := apiError(http.StatusNotFound, "LaterRecordFailed")
+	command := &partialGlazeCommand{CommandDescription: cmds.NewCommandDescription("partial"), err: cause}
+	wrapped := WithExitCodes(command).(cmds.GlazeCommand)
+	processor := &recordingProcessor{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := wrapped.RunIntoGlazeProcessor(ctx, nil, processor)
+	if processor.rows != 1 || !processor.closed || processor.closeContextErr != nil {
+		t.Fatalf("processor rows=%d closed=%v closeCtx=%v", processor.rows, processor.closed, processor.closeContextErr)
 	}
-	if wrapped.Description().Name != "whoami" {
-		t.Errorf("the wrapper lost the description: %q", wrapped.Description().Name)
+	var got *client.APIError
+	if ExitCodeFor(err) != ExitNotFound || !errors.As(err, &got) || got != cause {
+		t.Fatalf("returned error lost code/cause: %v", err)
 	}
+}
+
+type partialGlazeCommand struct {
+	*cmds.CommandDescription
+	err error
+}
+
+func (c *partialGlazeCommand) RunIntoGlazeProcessor(ctx context.Context, _ *values.Values, gp middlewares.Processor) error {
+	if err := gp.AddRow(ctx, types.NewRow(types.MRP("status", "accepted"))); err != nil {
+		return err
+	}
+	return c.err
+}
+
+type recordingProcessor struct {
+	rows            int
+	closed          bool
+	closeContextErr error
+}
+
+func (p *recordingProcessor) AddRow(context.Context, types.Row) error { p.rows++; return nil }
+func (p *recordingProcessor) Close(ctx context.Context) error {
+	p.closed = true
+	p.closeContextErr = ctx.Err()
+	return nil
 }

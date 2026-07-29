@@ -507,6 +507,22 @@ func TestHyperslopExitCodeContract(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("buffered output is finalized before a later row fails", func(t *testing.T) {
+		input := strings.NewReader("{\"temperature\":21}\n{\"temperature\":\"warm\"}\n")
+		stdout, stderr, code := cliWithStdin(t, client, authed, input,
+			"push", "greenhouse", "--stdin", "--ndjson", "--format", "json")
+		if code != 5 {
+			t.Fatalf("exit=%d stderr=%q, want validation exit 5", code, stderr)
+		}
+		var rows []map[string]any
+		if err := json.Unmarshal([]byte(stdout), &rows); err != nil {
+			t.Fatalf("buffered stdout is not finalized JSON: %q: %v", stdout, err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("buffered rows=%d, want the one successful row: %s", len(rows), stdout)
+		}
+	})
 }
 
 // cliWithStdin runs a client subcommand with the given stdin.

@@ -29,6 +29,10 @@ type rangeSettings struct {
 // rangeFields declares the bounds. defaultLimit differs per verb: a query pages
 // 50, a tail shows the last 10, an export takes everything it is allowed.
 func rangeFields(defaultLimit int) []*fields.Definition {
+	return rangeFieldsWithOrder(defaultLimit, string(datadrop.OrderDesc))
+}
+
+func rangeFieldsWithOrder(defaultLimit int, defaultOrder string) []*fields.Definition {
 	return []*fields.Definition{
 		ddcli.DropStreamField(),
 		fields.New("limit", fields.TypeInteger,
@@ -36,7 +40,7 @@ func rangeFields(defaultLimit int) []*fields.Definition {
 			fields.WithHelp("maximum number of events (server caps at 1000)")),
 		fields.New("order", fields.TypeChoice,
 			fields.WithChoices("asc", "desc"),
-			fields.WithDefault("desc"),
+			fields.WithDefault(defaultOrder),
 			fields.WithHelp("sequence order")),
 		fields.New("from", fields.TypeString,
 			fields.WithDefault(""),

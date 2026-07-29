@@ -35,6 +35,16 @@ func TestResolvePushFilesAllowsSymlinkToRegularFile(t *testing.T) {
 	}
 }
 
+func TestBuildCommitRequestRejectsExplicitEmptySchema(t *testing.T) {
+	schemaPath := filepath.Join(t.TempDir(), "empty.schema.json")
+	if err := os.WriteFile(schemaPath, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, err := buildCommitRequest(&pushSettings{Schema: schemaPath}); err == nil {
+		t.Fatal("buildCommitRequest silently omitted an explicitly empty schema")
+	}
+}
+
 func TestBuildCommitRequestAppliesOverridesToNullManifest(t *testing.T) {
 	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
 	if err := os.WriteFile(manifestPath, []byte("null\n"), 0o600); err != nil {

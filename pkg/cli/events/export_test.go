@@ -9,7 +9,37 @@ import (
 	"testing/iotest"
 
 	"github.com/pkg/errors"
+
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
 )
+
+func TestExportQueryHonorsDirectionalCursorOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		order  string
+		after  int64
+		before int64
+	}{
+		{"ascending after", string(datadrop.OrderAsc), 10, 0},
+		{"descending before", string(datadrop.OrderDesc), 0, 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := exportSettings{
+				Drop: "greenhouse",
+				rangeSettings: rangeSettings{
+					Order: tc.order, After: tc.after, Before: tc.before, Limit: datadrop.MaxLimit,
+				},
+			}
+			q, err := s.query(s.Drop)
+			if err != nil {
+				t.Fatalf("query: %v", err)
+			}
+			if string(q.Order) != tc.order || q.After != tc.after || q.Before != tc.before {
+				t.Fatalf("query = %+v, want order=%s after=%d before=%d", q, tc.order, tc.after, tc.before)
+			}
+		})
+	}
+}
 
 func TestPublishExportFilePreservesExistingFileOnTransferFailure(t *testing.T) {
 	directory := t.TempDir()

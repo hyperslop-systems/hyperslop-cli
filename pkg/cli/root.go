@@ -119,11 +119,12 @@ func Execute(registrars ...Registrar) int {
 		return ExitError
 	}
 	if err := root.Execute(); err != nil {
-		// Converted verbs never arrive here: ExitOn has already reported and
-		// exited. What is left is cobra's own errors — an unknown flag, an
-		// unknown subcommand — which is why the prefix is the same one ExitOn
-		// uses.
 		_, _ = os.Stderr.WriteString(ErrorPrefix() + err.Error() + "\n")
+		if IsCommandError(err) {
+			return ExitCodeFor(err)
+		}
+		// Parser/traversal errors (unknown flag/subcommand, bad arguments) are
+		// invocation failures rather than command runtime failures.
 		return ExitUsage
 	}
 	return ExitOK

@@ -71,7 +71,7 @@ envelope, or when the export is large enough that buffering it would matter.
 				fields.WithIsArgument(true),
 				fields.WithHelp("the drop to export")),
 		),
-		cmds.WithFlags(append(rangeFields(datadrop.MaxLimit),
+		cmds.WithFlags(append(rangeFieldsWithOrder(datadrop.MaxLimit, string(datadrop.OrderAsc)),
 			fields.New("format", fields.TypeChoice,
 				fields.WithChoices("csv", "ndjson", "json"),
 				fields.WithDefault("ndjson"),
@@ -101,9 +101,6 @@ func (c *ExportCommand) RunIntoWriter(
 		return err
 	}
 
-	// Export is always a chronological replay. Set its order before the shared
-	// range builder normalizes directional cursors.
-	s.Order = string(datadrop.OrderAsc)
 	q, err := s.query(s.Drop)
 	if err != nil {
 		return err
