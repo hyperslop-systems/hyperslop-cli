@@ -15,12 +15,18 @@ Owners: []
 RelatedFiles:
     - Path: repo://cmd/hyperslop/smoke_test.go
       Note: Real-server buffered partial-output regression (commit 8f230e1)
+    - Path: repo://pkg/cli/dataset/get.go
+      Note: Sixth-pass whole-version staged download transaction (commit c72f6e6)
+    - Path: repo://pkg/cli/dataset/push.go
+      Note: Literal colon-path resolution (commit c72f6e6)
     - Path: repo://pkg/cli/events/tail.go
       Note: Central follow execution-mode validation (commit 4abebf3)
     - Path: repo://pkg/cli/exit.go
       Note: Fourth-pass typed exit propagation and failure-path processor finalization (commit 8f230e1)
     - Path: repo://pkg/client/datasets.go
-      Note: Stable cancellation-aware upload snapshots (commit 4abebf3)
+      Note: |-
+        Stable cancellation-aware upload snapshots (commit 4abebf3)
+        Reject negative import row limits before requests (commit c72f6e6)
     - Path: repo://pkg/jsondoc/jsondoc.go
       Note: Lossless arbitrary-JSON boundary (commit 4abebf3)
     - Path: repo://pkg/tabular/rows.go
@@ -31,6 +37,7 @@ LastUpdated: 2026-07-29T11:31:44.983890846-04:00
 WhatFor: So the build can be reviewed, resumed, and audited against the design doc's phased plan.
 WhenToUse: Read before resuming the HYPERSLOP-1 build or reviewing a phase's correctness.
 ---
+
 
 
 
@@ -971,3 +978,60 @@ I also assessed protobuf for the TypeScript UI. It can eliminate manual DTO drif
 ### Technical details
 - Fifth review head: `9659686`; comments `3677701638`, `3677701646`, `3677701648`, `3677701650`, `3677701654`, `3677701661`, `3677701668`.
 - Findings: 2 P1, 5 P2; all accepted and fixed systemically.
+
+## Step 14: Sixth Review Pass — Dataset Transaction and Input Contracts
+
+The sixth review found six valid contracts. The important one was whole-version `dataset get --force`: individual files were transactional, but the dataset was not. I changed it to download and verify every file into hidden sibling stages before replacing any target; force targets are backed up and restored if publication itself fails.
+
+The remaining changes make side-effecting numeric bounds explicit, preserve literal colon-bearing paths, reject conflicting download modes, make the schema example extract the actual schema document, and count human-facing token labels by Unicode code point.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, go ahead."
+
+**Assistant interpretation:** Implement all six independently validated sixth-review findings with regressions.
+
+**Inferred user intent:** Close genuine CLI correctness gaps while preserving the customer CLI’s existing wire and output contracts.
+
+**Commit (code):** `c72f6e6` — "fix(cli): address sixth review input and download contracts"
+
+### What I did
+- Rejected negative import row limits before any HTTP request.
+- Resolved existing local paths before interpreting `LOCAL:LOGICAL`, preserving literal colons.
+- Staged and verified full-version downloads before a transactional publish/rollback phase.
+- Rejected `--archive` with `--file`.
+- Corrected schema round-trip help to JSONL plus `jq '.spec'` extraction.
+- Used `utf8.RuneCountInString` for token-name limits.
+
+### Why
+- Side-effecting defaults must never hide invalid user input.
+- A multi-file download needs a dataset-level transaction, not merely per-file atomicity.
+
+### What worked
+- Targeted tests and the full hyperslop-cli standalone suite, vet, lint, and gofmt passed.
+- Full go-go-datadrop suite, vet, lint, gofmt, logcopter, and merged pbui shell TypeScript check passed.
+
+### What didn't work
+- The first transactional publisher used a named return for deferred rollback and lint rejected it exactly: `pkg/cli/dataset/get.go:351:1: named return "retErr" with type "error" found (nonamedreturns)`. Replaced it with an explicit `committed` flag and reran the complete hyperslop validation.
+
+### What I learned
+- A staged file is only a safe transaction boundary if publication can restore every pre-existing target after any later promotion failure.
+- User-visible “characters” must not be implemented as UTF-8 bytes.
+
+### What was tricky to build
+- The batch publisher first moves all force destinations to same-directory hidden backups, then promotes staged payloads, and rolls back published files plus backups on error. The tests cover the more common late-transfer/digest failure before publication; the rollback protects the later promotion phase.
+
+### What warrants a second pair of eyes
+- Review the operational disk-space implication: staged downloads temporarily require a full additional version, and `--force` briefly retains old targets as backups.
+
+### What should be done in the future
+- Push this commit with docs, resolve six threads after CI, and request a new review.
+- Phase 9 release remains externally gated.
+
+### Code review instructions
+- Start with `pkg/cli/dataset/get.go` and `TestDownloadVersionForceDoesNotMixVersionsOnLaterFailure`.
+- Validate client input bounds, colon-path resolution, schema help, and Unicode token names with their colocated unit tests.
+
+### Technical details
+- Sixth review head: `98faa25`; comments `3677882000`, `3677882006`, `3677882009`, `3677882017`, `3677882021`, `3677882026`.
+- Findings: 1 P1, 5 P2; all accepted and fixed.

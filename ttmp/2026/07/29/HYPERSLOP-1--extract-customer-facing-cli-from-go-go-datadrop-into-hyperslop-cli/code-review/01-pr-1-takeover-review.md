@@ -29,14 +29,18 @@ RelatedFiles:
       Note: SSE reconnect and cursor-order remediation
     - Path: repo://pkg/cli/root.go
       Note: customer usage exit-code boundary
+    - Path: repo://pkg/cli/schemacmd/show.go
+      Note: Correct schema extraction help (commit c72f6e6)
     - Path: repo://pkg/client/client.go
       Note: HTTP status-preserving append behavior
+    - Path: repo://pkg/datadrop/account.go
+      Note: Unicode token-name character count (commit c72f6e6)
     - Path: repo://pkg/jsondoc/jsondoc.go
       Note: Systemic remedy for three numeric precision findings
     - Path: repo://pkg/tabular/flatten.go
       Note: collision-free flattened JSON paths
-    - Path: ws://go-go-datadrop/ui/src/api/client.ts
-      Note: Evidence for future cross-language schema generation assessment
+    - Path: ws://go-go-datadrop/ui/src/main.tsx
+      Note: PBUI/Datalab shell evidence for the deferred schema-generation assessment
 ExternalSources:
     - https://github.com/hyperslop-systems/hyperslop-cli/pull/1
 Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 30 findings across three review passes were fixed with regression tests in commits 1871472, a6c755a, 2114ac6, 0e60966, and 7647177.'
@@ -44,6 +48,9 @@ LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
 ---
+
+
+
 
 
 
@@ -194,6 +201,17 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 | 42 | P2 | Follow accepted buffered non-streaming formatters | One `validateFollow` enforces both cursor and formatter invariants; only JSONL is accepted for follow. |
 | 43 | P2 | Negative GC age silently selected the server default | The client rejects negative age before issuing any request; zero retains documented default behavior. |
 
+### Sixth-review findings
+
+| # | Severity | Finding | Resolution and evidence |
+|---|---|---|---|
+| 44 | P2 | Negative import limits silently selected server default | `ImportDataset` rejects negative max rows before issuing a request; zero remains the documented default. |
+| 45 | P2 | Existing colon-bearing local paths were parsed as mappings | Existing paths take precedence over `LOCAL:LOGICAL`; mapping syntax remains available for nonexistent mapping expressions. |
+| 46 | P1 | Whole-version forced download could leave old/new file mixtures | Download/verify every file to hidden stages, then publish as a batch with same-directory backups and rollback. Regression proves a late digest failure preserves both old files. |
+| 47 | P2 | `--archive` silently ignored `--file` | `getSettings.validate` rejects mutually exclusive selectors before client construction. |
+| 48 | P2 | Schema show help’s repeated formatter emitted a wrapper, not schema JSON | Help now selects `--format jsonl --output-fields spec` and extracts `.spec` via jq; help regression pins it. |
+| 49 | P2 | Token label length counted UTF-8 bytes as characters | Validation counts Unicode runes; CJK 100/101-character boundary test added. |
+
 ## Systemic assessment after five review waves
 
 The fifth wave confirms four root causes rather than 43 unrelated mistakes:
@@ -247,9 +265,9 @@ Fresh after remediation:
 
 ### Remaining before merge/release
 
-1. Push systemic fifth-pass fix `4abebf3` with this documentation update.
+1. Push sixth-pass fix `c72f6e6` with this documentation update.
 2. Wait for all PR checks on the new head.
-3. Reply to and resolve the seven fifth-review threads only after GitHub sees the fixing commit and checks pass.
+3. Reply to and resolve the six sixth-review threads only after GitHub sees the fixing commit and checks pass.
 4. Request another fresh review; continue until a pass reports no findings.
 5. Do not tag/release from the PR branch. Phase 9 still requires merge sequencing, confirmed Homebrew/Fury destinations and release secrets, then a tagged hyperslop-cli version before removing go-go-datadrop's local replace.
 
@@ -262,6 +280,7 @@ Fresh after remediation:
 - Third-pass GoSec follow-up: `0e60966`
 - Fourth-pass fix: `8f230e1`
 - Fifth-pass systemic fix: `4abebf3`
+- Sixth-pass fix: `c72f6e6`
 - Companion admin/server fixes: `7647177`, `2703a73`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`

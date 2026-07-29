@@ -129,3 +129,13 @@ Fifth PR #1 review found seven issues (2 P1, 5 P2). Fixed systemically in 4abebf
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/client/datasets.go — Stable content-addressed upload boundary
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/jsondoc/jsondoc.go — Shared exact-number JSON boundary
 
+
+## 2026-07-29
+
+Sixth PR #1 review found six valid findings (1 P1, 5 P2). Fixed all in c72f6e6: pre-request import bounds, colon paths, dataset-level staged download transaction, mutually-exclusive selectors, executable schema help, and Unicode token-name counts. Full hyperslop and merged admin/pbui validation passes.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — Atomic multi-file download publication
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/client/datasets.go — Input boundary for destructive import
+
