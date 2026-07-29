@@ -1,4 +1,4 @@
-module github.com/go-go-golems/XXX
+module github.com/hyperslop-systems/hyperslop-cli
 
 go 1.26.1
 

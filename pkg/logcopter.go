@@ -4,4 +4,4 @@ package pkg
 
 import logcopter "github.com/go-go-golems/logcopter/pkg/logcopter"
 
-var log = logcopter.Package("go-go-golems.XXX.pkg")
+var log = logcopter.Package("hyperslop-systems.hyperslop-cli.pkg")
