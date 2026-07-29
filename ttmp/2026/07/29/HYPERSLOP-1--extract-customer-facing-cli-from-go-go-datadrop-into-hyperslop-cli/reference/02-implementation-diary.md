@@ -568,3 +568,129 @@ assessment and finding-by-finding disposition is in
 - GitHub setting changed: Dependency Graph enabled; no security check was skipped.
 - No HTTP route or JSON field was removed. New `DeleteDatasetVersionResult` types
   the JSON body the server already emitted.
+
+## Step 11: Fresh PR review and second-pass edge-case remediation
+
+After the first 16 threads were fixed, pushed, green, replied to, and resolved,
+requested a fresh Codex review instead of assuming the takeover patch was
+complete. The connector accepted the request immediately but needed roughly 11
+minutes to review the 115-file PR. It returned seven additional valid findings:
+two P1 data-integrity issues and five P2 consistency/validation issues.
+
+Addressed all seven with focused tests, then reran the complete standalone and
+workspace validation in both repositories. This second pass confirmed the value
+of iterative independent review: the first collision fix correctly escaped dots
+and backslashes but still lacked an explicit representation for an empty JSON
+key segment, and the single-file version pin exposed the same alias race in the
+whole-version loop.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 10)
+
+**Assistant interpretation:** Continue owning PR #1 through independent re-review, not merely the original comment list; fix any newly discovered correctness issues and preserve takeover evidence.
+
+**Inferred user intent:** Reach a genuinely review-ready state through iterative assessment and validation, with no known review findings left deferred.
+
+**Commit (code):** `a6c755a` — "fix(HYPERSLOP-1): address second-pass PR review edge cases"
+
+### What I did
+
+- Waited for a fresh Codex review on head `50407db`; review `4811526324` produced
+  seven new threads.
+- Encoded empty JSON key segments as `\\0`, keeping literal `\\0` distinct via
+  normal backslash escaping.
+- Escaped CSV leading headers and schema property keys through the same encoder
+  used by row values, while retaining original headers for pre-flatten CSV text typing.
+- Pinned all whole-version file requests to `found.Version`, not the mutable
+  `latest` alias.
+- Rejected `tail --follow` with `--after`, `--before`, `--from`, or `--to`, because
+  the sequence-only SSE API cannot preserve those predicates.
+- Made `export --output-file` transactional with temp+copy+fsync+close+rename.
+- Reinitialized a null manifest map before applying title/license/description overrides.
+- Rejected `.` as a dataset logical path.
+- Added regression tests for each case and updated tail/output help.
+- Reran full tests/lint/vet/gofmt in both repos, real-server smoke, no-cycle,
+  logcopter, and GoReleaser validation.
+
+### Why
+
+- Empty-key and CSV projection mismatches could still silently lose or duplicate data.
+- Mutable `latest` resolution could mix immutable dataset versions.
+- Follow filters that disappear after the initial page violate the command the user asked for.
+- In-place export truncation destroys known-good output on network failure.
+- Null manifest panic and root path acceptance are preventable input-boundary failures.
+
+### What worked
+
+- All targeted tests passed immediately after the respective fixes.
+- `GOWORK=off go test ./... -count=1` passed in hyperslop-cli.
+- `GOWORK=off go test ./... -count=1` passed in go-go-datadrop, including the
+  84.173-second admin binary package and shared tabular fixture.
+- Real-server hyperslop suite passed in 77.906 seconds.
+- Both linters reported `0 issues`; vet, gofmt, no-cycle, logcopter, and
+  `goreleaser check` passed.
+
+### What didn't work
+
+- The first multi-edit attempt against `pkg/tabular/tabular_test.go` used spacing
+  that did not exactly match gofmt's aligned map literal. Exact tool failure:
+
+  `Could not find edits[1] in .../pkg/tabular/tabular_test.go. The oldText must match exactly including all whitespace and newlines.`
+
+  Read the exact block and replaced the whole collision test plus inserted the
+  CSV test in a second, non-overlapping edit. No code or test failure remained.
+
+### What I learned
+
+- An escaped separator is not yet an injective path encoding unless the empty
+  segment also has a visible representation.
+- Schema metadata, header order, and row values must all pass through the same
+  name transform; fixing only values creates ghost columns.
+- Once an alias is resolved to immutable metadata, every related byte request
+  must use that same immutable identifier.
+- Some flag combinations cannot be faithfully emulated client-side. An explicit
+  rejection is safer than silently applying constraints only to an initial page.
+
+### What was tricky to build
+
+- Empty-segment encoding had to avoid colliding with a literal marker. Returning
+  `\\0` for empty while escaping a literal backslash first maps literal `\\0` to
+  `\\\\0`, preserving injectivity.
+- CSV schema typing runs before flattening to preserve `001`, while builder
+  metadata lookup runs after flattening. The solution keeps original names in
+  `TextColumns` but escapes the builder's headers and property keys.
+- Whole-version pinning needed to apply even under `--no-verify`; otherwise a
+  command could silently assemble files from multiple versions rather than fail a hash.
+- Follow time bounds cannot safely terminate on producer `time`, which need not
+  be monotonic by sequence. Rejecting unsupported combinations is the honest API.
+
+### What warrants a second pair of eyes
+
+- Confirm `\\0` is an acceptable public column encoding and that downstream UI
+  field selectors treat backslashes literally.
+- Review the decision to reject rather than filter follow/range combinations.
+- Review atomic export mode behavior: temporary files are owner-only by default,
+  safer than the old `os.Create` behavior but potentially a visible mode change.
+
+### What should be done in the future
+
+- Push `a6c755a` plus this diary update, wait for all checks, reply to and resolve
+  the seven new threads, then request a final review on the resulting head.
+- Phase 9 release sequencing remains unchanged.
+
+### Code review instructions
+
+- Start with fresh-review rows 17-23 in the takeover code-review document.
+- Projection: `pkg/tabular/{flatten,project}.go` and the collision/CSV tests.
+- I/O: `pkg/cli/dataset/get.go`, `pkg/cli/events/export.go`, and their failure tests.
+- Validation: `pkg/cli/events/tail.go`, `pkg/cli/dataset/push.go`,
+  `pkg/datadrop/dataset.go`.
+- Validate with the same full command matrix listed in Step 10.
+
+### Technical details
+
+- Fresh review ID: `4811526324`; reviewed head `50407db3329eb6e7f11a8d22da88e58083ce2ea2`.
+- New comments: `3676929577`, `3676929581`, `3676929589`, `3676929593`,
+  `3676929598`, `3676929599`, `3676929601`.
+- Findings: 2 P1, 5 P2; none deferred.

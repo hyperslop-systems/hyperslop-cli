@@ -78,3 +78,14 @@ Companion branch publish hygiene: first go-go-datadrop push exposed a 125,701,65
 
 - /home/manuel/workspaces/2026-07-29/split-cli/go-go-datadrop/.gitignore — prevents root CLI build artifacts from entering history
 
+
+## 2026-07-29
+
+Fresh PR #1 review on head 50407db found seven additional valid edge cases (2 P1, 5 P2). Fixed all in a6c755a: empty-key path encoding, CSV header/schema escaping, whole-version pinning, follow/range rejection, atomic exports, null manifest overrides, and root-marker path rejection. Full tests in both repos, 78s live smoke, lint/vet/gofmt/no-cycle/logcopter/GoReleaser all pass.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — immutable whole-version pinning
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/events/export.go — transactional export publication
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/tabular/flatten.go — complete injective path encoding including empty segments
+

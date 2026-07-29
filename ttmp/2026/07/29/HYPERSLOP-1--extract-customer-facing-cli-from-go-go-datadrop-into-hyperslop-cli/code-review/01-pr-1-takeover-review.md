@@ -31,7 +31,7 @@ RelatedFiles:
       Note: collision-free flattened JSON paths
 ExternalSources:
     - https://github.com/hyperslop-systems/hyperslop-cli/pull/1
-Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 16 inline findings were fixed with regression tests in commits 1871472 and 7647177.'
+Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 16 initial and 7 second-pass findings were fixed with regression tests in commits 1871472, a6c755a, and 7647177.'
 LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
@@ -51,8 +51,9 @@ unit and live-server coverage. The colleague's phase commits and implementation 
 The principal weakness was not architecture but adversarial review depth. Several inherited happy-path
 implementations were moved without checking clean network disconnects, failed downloads, path-key collisions,
 HTTP status semantics, one-time credential failure ordering, or numeric overflow. Automated review found 16
-valid issues (three P1, thirteen P2). All are remediated with regression tests in hyperslop-cli commit `1871472`
-and companion go-go-datadrop commit `7647177`.
+valid issues (three P1, thirteen P2). All were remediated with regression tests in hyperslop-cli commit `1871472`
+and companion go-go-datadrop commit `7647177`. A requested second Codex pass reviewed head `50407db` and found
+seven more valid edge cases (two P1, five P2), remediated in `a6c755a`.
 
 ## Context
 
@@ -135,6 +136,18 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 | 15 | P2 | `dataset rm --version latest` emitted literal `latest` rather than the deleted number | Promote the existing delete response to `DeleteDatasetVersionResult`; client, row, command, and server test concrete version 1/7. |
 | 16 | P2 | Device flow consumed approval before discovering a missing credential parent | Preflight/create 0700 parents and test a 0600 temp file before starting authorization; final credential publication is atomic. |
 
+### Fresh-review findings
+
+| # | Severity | Finding | Resolution and evidence |
+|---|---|---|---|
+| 17 | P1 | Empty JSON key segments still collided with root paths | Encode an empty segment as `\\0`; literal backslashes remain escaped. Extended collision test covers empty object path, literal `\\0`, and nested null. |
+| 18 | P2 | Whole-version `latest` downloads resolved the alias separately per file | Convert `found.Version` to a numeric path once and use it for every byte request. Two-file server test rejects unpinned paths. |
+| 19 | P2 | `tail --follow` dropped `from`/`to`/`before` predicates after the initial page | Reject follow with `after`, `before`, `from`, or `to`, since the live API resumes by sequence only. Table test and help text cover the rule. |
+| 20 | P1 | Export output files were truncated before transfer completion | Copy to a temporary sibling, fsync/close, then rename. Tests prove transfer failure preserves the existing export and success replaces it. |
+| 21 | P2 | A JSON `null` manifest plus CLI metadata overrides panicked | Reinitialize the decoded nil map before applying overrides; test publishes title/license over a null manifest. |
+| 22 | P2 | CSV headers/schema properties used unescaped names while row keys were escaped | Escape leading headers and builder property keys through the same segment encoder while retaining original names for CSV text typing. Test covers dotted/backslash headers, schema typing, order, and zero-padding. |
+| 23 | P2 | Dataset logical path `.` was accepted | Reject the dataset-root marker explicitly; valid/invalid path table added. |
+
 ## Additional takeover fixes
 
 - Enabled the repository dependency graph through the GitHub API. `GET /dependency-graph/sbom` now succeeds; the
@@ -151,7 +164,8 @@ Fresh after remediation:
 
 - hyperslop-cli: `GOWORK=off go test ./... -count=1` — pass.
 - go-go-datadrop: `GOWORK=off go test ./... -count=1` — pass, including 53s admin smoke and authz/server suites.
-- workspace: `go test ./cmd/hyperslop -run TestHyperslop -count=1 -v` — pass, including the 48s real-server full path and exit 1/2/3/4/5 behavior.
+- workspace after first pass: `go test ./cmd/hyperslop -run TestHyperslop -count=1 -v` — pass, including the 48s real-server full path and exit 1/2/3/4/5 behavior.
+- workspace after second pass: the same real-server suite passed in 77.906s; go-go-datadrop's full standalone suite passed with its 84.173s binary package.
 - both repositories: `golangci-lint run ./...`, `go vet ./...`, and `gofmt` — clean.
 - hyperslop-cli: logcopter check, no-reverse-dependency guard, `goreleaser check`, snapshot build, and fresh-GOBIN install — pass.
 
@@ -166,16 +180,17 @@ Fresh after remediation:
 
 ### Remaining before merge/release
 
-1. Both coordinated branches are pushed: PR head `ab68224` and go-go-datadrop `7647177`.
-2. Wait for all PR checks on the new head (Dependency Review already passes after enabling the graph).
-3. Resolve the 16 review threads only after GitHub sees the fixing commit and checks pass.
-4. Trigger a fresh Codex review to detect regressions or missed issues.
+1. First-pass coordinated branches are pushed; second-pass fix `a6c755a` awaits push with this documentation update.
+2. Wait for all PR checks on the new head.
+3. Reply to and resolve the seven fresh-review threads only after GitHub sees the fixing commit and checks pass.
+4. Request one final fresh review of the second-pass head; do not assume a fix pass cannot introduce another edge case.
 5. Do not tag/release from the PR branch. Phase 9 still requires merge sequencing, confirmed Homebrew/Fury destinations and release secrets, then a tagged hyperslop-cli version before removing go-go-datadrop's local replace.
 
 ## References
 
 - PR: <https://github.com/hyperslop-systems/hyperslop-cli/pull/1>
-- Fix commit: `1871472`
+- First-pass fix: `1871472`
+- Second-pass fix: `a6c755a`
 - Companion admin/server fix: `7647177`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`
