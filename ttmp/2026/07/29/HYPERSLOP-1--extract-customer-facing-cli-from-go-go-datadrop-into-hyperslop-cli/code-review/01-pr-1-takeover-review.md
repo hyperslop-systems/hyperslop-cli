@@ -21,6 +21,10 @@ RelatedFiles:
       Note: credential preflight and atomic persistence
     - Path: repo://pkg/cli/dataset/get.go
       Note: transactional and verified download remediation
+    - Path: repo://pkg/cli/dataset/push.go
+      Note: Explicit empty-schema rejection (commit 8f230e1)
+    - Path: repo://pkg/cli/events/export.go
+      Note: Fourth-pass cursor order correction (commit 8f230e1)
     - Path: repo://pkg/cli/events/tail.go
       Note: SSE reconnect and cursor-order remediation
     - Path: repo://pkg/cli/root.go
@@ -36,6 +40,7 @@ LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
 ---
+
 
 
 # PR 1 takeover review
@@ -161,6 +166,17 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 | 29 | P2 | Archive mode ignored default verification | Resolve/pin the manifest, parse tar while copying canonical bytes, verify membership/type/size/digest for every file, and publish only on success. Metadata is capped and file reads are bounded by manifest/header size (`0e60966`, GoSec G110). Valid/mismatch atomic tests added. |
 | 30 | P2 | Companion build/seeder failures became integration skips | Resolve module availability separately; absent standalone companion skips, but present-workspace build/seed failures are fatal. Both modes tested. |
 
+### Fourth-review findings
+
+| # | Severity | Finding | Resolution and evidence |
+|---|---|---|---|
+| 31 | P2 | CSV whitespace-only records past the sample cap were missed | CSV-aware detection ignores only CR/LF-only physical lines; spaces/tabs count as a record. Regression covers both cases. |
+| 32 | P1 | Immediate `os.Exit` lost buffered successful rows after a later failure | Return typed coded errors, close the Glaze processor once on failure with a non-cancelled context, and let the root print/exit. Real-server JSON push test proves row one survives row two's exit 5. |
+| 33 | P2 | Export overwrote explicit order, making `--before` unusable | Export fields default to ascending but retain the decoded explicit order. Ascending/after and descending/before are tested. |
+| 34 | P2 | Distinct counts conflated strings, numbers, and booleans | Prefix tracked values with their logical type; mixed `"1"`/`1` and `"true"`/`true` count as four. |
+| 35 | P2 | NDJSON accepted concatenated and multi-line documents | Read physical lines and require exactly one valid JSON document per nonblank line; both invalid shapes and valid blank separators are tested. |
+| 36 | P2 | Explicit empty schemas were silently omitted by `omitempty` | Reject empty schema bytes before constructing the commit request; empty-file regression added. |
+
 ## Additional takeover fixes
 
 - Enabled the repository dependency graph through the GitHub API. `GET /dependency-graph/sbom` now succeeds; the
@@ -194,10 +210,10 @@ Fresh after remediation:
 
 ### Remaining before merge/release
 
-1. First and second review passes are pushed/resolved; third-pass fix `2114ac6` awaits push with this documentation update.
+1. Push fourth-pass fix `8f230e1` and companion root fix `2703a73` with this documentation update.
 2. Wait for all PR checks on the new head.
-3. Reply to and resolve the seven third-review threads only after GitHub sees the fixing commit and checks pass.
-4. Request another fresh review of the third-pass head; continue until a pass reports no findings.
+3. Reply to and resolve the six fourth-review threads only after GitHub sees the fixing commit and checks pass.
+4. Request another fresh review; continue until a pass reports no findings.
 5. Do not tag/release from the PR branch. Phase 9 still requires merge sequencing, confirmed Homebrew/Fury destinations and release secrets, then a tagged hyperslop-cli version before removing go-go-datadrop's local replace.
 
 ## References
@@ -207,6 +223,7 @@ Fresh after remediation:
 - Second-pass fix: `a6c755a`
 - Third-pass fix: `2114ac6`
 - Third-pass GoSec follow-up: `0e60966`
-- Companion admin/server fix: `7647177`
+- Fourth-pass fix: `8f230e1`
+- Companion admin/server fixes: `7647177`, `2703a73`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`

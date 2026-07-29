@@ -12,13 +12,20 @@ Topics:
 DocType: reference
 Intent: long-term
 Owners: []
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://cmd/hyperslop/smoke_test.go
+      Note: Real-server buffered partial-output regression (commit 8f230e1)
+    - Path: repo://pkg/cli/exit.go
+      Note: Fourth-pass typed exit propagation and failure-path processor finalization (commit 8f230e1)
+    - Path: repo://pkg/tabular/rows.go
+      Note: Fourth-pass CSV truncation and strict NDJSON semantics (commit 8f230e1)
 ExternalSources: []
-Summary: "Step-by-step implementation diary for building the HYPERSLOP-1 extraction: moving the customer-facing CLI out of go-go-datadrop into hyperslop-cli. Records what changed, why, commands run, failures verbatim, and commit hashes per phase."
+Summary: 'Step-by-step implementation diary for building the HYPERSLOP-1 extraction: moving the customer-facing CLI out of go-go-datadrop into hyperslop-cli. Records what changed, why, commands run, failures verbatim, and commit hashes per phase.'
 LastUpdated: 2026-07-29T11:31:44.983890846-04:00
-WhatFor: "So the build can be reviewed, resumed, and audited against the design doc's phased plan."
-WhenToUse: "Read before resuming the HYPERSLOP-1 build or reviewing a phase's correctness."
+WhatFor: So the build can be reviewed, resumed, and audited against the design doc's phased plan.
+WhenToUse: Read before resuming the HYPERSLOP-1 build or reviewing a phase's correctness.
 ---
+
 
 # Implementation diary
 
@@ -830,3 +837,67 @@ integration tests must distinguish unavailable dependencies from broken ones.
 - New comments: `3677123924`, `3677123929`, `3677123935`, `3677123941`,
   `3677123946`, `3677123955`, `3677123964`.
 - Findings: 3 P1, 4 P2; none deferred.
+
+## Step 12: Fourth Review Pass and Deferred Exit Redesign
+
+A fourth automated review found six valid edge cases. I fixed all six rather than applying comments mechanically: the P1 exposed that the inherited `os.Exit` shim was designed for Glazed v1.3.8, while this repository uses v1.4.1 with Cobra `RunE`. The replacement returns typed coded errors and explicitly finalizes Glaze processors on failure, preserving successful buffered rows before the root prints and exits.
+
+The remaining fixes made truncation and NDJSON semantics format-accurate, preserved typed distinct values, honored export cursor direction, and rejected explicitly empty schemas. Both repositories passed full tests, vet, lint, and formatting; a real-server binary test proves valid JSON containing the successful first push row is flushed before row two exits 5.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 10)
+
+**Assistant interpretation:** Independently validate and remediate every fourth-pass finding while continuing the takeover-level architectural assessment.
+
+**Inferred user intent:** Deliver a PR whose edge-case behavior is trustworthy, not merely one with review threads closed.
+
+**Commit (code):** `8f230e1` — "fix(cli): address fourth review pass edge cases"
+
+**Commit (companion):** `2703a73` — "fix(cli): handle propagated coded command errors"
+
+### What I did
+- Made CSV cap detection distinguish ignored empty lines from whitespace records.
+- Enforced exactly one JSON document per nonblank NDJSON physical line.
+- Added type-discriminated distinct keys.
+- Kept export default ascending while honoring explicit descending/before cursors.
+- Rejected zero-length explicit schema input.
+- Replaced immediate process exit with coded errors plus failure-path processor close.
+- Added unit and real-server regressions for all six findings.
+
+### Why
+- Bounded sampling, provenance, cardinality, cursor flags, schema intent, and partial-write reporting are user-visible contracts.
+- `os.Exit` inside a command bypasses formatter cleanup and can make completed writes invisible, encouraging duplicate retries.
+
+### What worked
+- `GOWORK=off go test ./...`, workspace `go test ./...`, `go vet ./...`, `golangci-lint run ./...`, and gofmt passed in hyperslop-cli.
+- Full tests, vet, lint, and gofmt passed in go-go-datadrop.
+- `TestHyperslopExitCodeContract` passed all 3/4/5 mappings and buffered partial-output JSON finalization against the real server.
+
+### What didn't work
+- An initial complete rewrite tool call for `exit_test.go` exceeded the tool argument limit and was not executed. I reissued a smaller complete file and then ran targeted tests successfully.
+
+### What I learned
+- Glazed v1.4.1 already propagates errors through `RunE`; only processor finalization and stable code annotation belong in the wrapper.
+- Whitespace is format-specific: CSV spaces are data, while blank NDJSON whitespace is not a record.
+
+### What was tricky to build
+- On command failure Glazed's outer runner returns before closing its processor. The wrapper must close exactly once on failure, using `context.WithoutCancel`, while leaving success closure to Glazed.
+- Export needed an ascending default without overwriting a user's explicit order; a parameterized shared field builder preserves both.
+
+### What warrants a second pair of eyes
+- Review the single-close invariant in `exitCodeGlazeCommand` against future Glazed runner changes.
+- Confirm product expectations that export defaults ascending but supports explicit descending traversal.
+
+### What should be done in the future
+- Push both commits, wait for checks, reply to and resolve the six threads, and request another review.
+- Phase 9 release remains externally gated.
+
+### Code review instructions
+- Start with `pkg/cli/exit.go` and `cmd/hyperslop/smoke_test.go` for the P1.
+- Review `pkg/tabular/rows.go`, `pkg/tabular/infer.go`, `pkg/cli/events/export.go`, and `pkg/cli/dataset/push.go` for the P2 fixes.
+- Validate with the full two-repository matrix and `go test ./cmd/hyperslop -run TestHyperslopExitCodeContract -count=1 -v`.
+
+### Technical details
+- Fourth review head: `fbc09f0`; six comments `3677354459`, `3677354467`, `3677354473`, `3677354481`, `3677354487`, `3677354494`.
+- Findings: 1 P1, 5 P2; all accepted and fixed.

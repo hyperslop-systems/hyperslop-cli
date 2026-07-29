@@ -109,3 +109,13 @@ Third-pass CI follow-up 0e60966: GoSec G110 flagged unbounded tar.Reader copies 
 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — bounded archive entry verification
 
+
+## 2026-07-29
+
+Fourth PR #1 review found six valid issues (1 P1, 5 P2). Fixed all in hyperslop-cli 8f230e1 and companion 2703a73: buffered formatter finalization without os.Exit, CSV-aware cap detection, strict line-oriented NDJSON, typed distinct counts, export cursor order, and empty-schema rejection. Full two-repo tests/lint/vet/gofmt and real-server partial-output exit test pass.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/exit.go — Preserves successful buffered rows before coded command failure
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/tabular/rows.go — Format-accurate bounded CSV and NDJSON parsing
+
