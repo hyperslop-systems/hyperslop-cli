@@ -31,7 +31,7 @@ RelatedFiles:
       Note: collision-free flattened JSON paths
 ExternalSources:
     - https://github.com/hyperslop-systems/hyperslop-cli/pull/1
-Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 16 initial and 7 second-pass findings were fixed with regression tests in commits 1871472, a6c755a, and 7647177.'
+Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 30 findings across three review passes were fixed with regression tests in commits 1871472, a6c755a, 2114ac6, and 7647177.'
 LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
@@ -53,7 +53,8 @@ implementations were moved without checking clean network disconnects, failed do
 HTTP status semantics, one-time credential failure ordering, or numeric overflow. Automated review found 16
 valid issues (three P1, thirteen P2). All were remediated with regression tests in hyperslop-cli commit `1871472`
 and companion go-go-datadrop commit `7647177`. A requested second Codex pass reviewed head `50407db` and found
-seven more valid edge cases (two P1, five P2), remediated in `a6c755a`.
+seven more valid edge cases (two P1, five P2), remediated in `a6c755a`. A third pass on `8653727` found
+seven further valid findings (three P1, four P2), remediated in `2114ac6`.
 
 ## Context
 
@@ -148,6 +149,18 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 | 22 | P2 | CSV headers/schema properties used unescaped names while row keys were escaped | Escape leading headers and builder property keys through the same segment encoder while retaining original names for CSV text typing. Test covers dotted/backslash headers, schema typing, order, and zero-padding. |
 | 23 | P2 | Dataset logical path `.` was accepted | Reject the dataset-root marker explicitly; valid/invalid path table added. |
 
+### Third-review findings
+
+| # | Severity | Finding | Resolution and evidence |
+|---|---|---|---|
+| 24 | P1 | Established SSE transport read errors still terminated follow | Added typed `StreamReadError`; follow retries only that class with cursor/backoff while malformed frame decode remains fatal. Parser and custom-transport follow tests cover both. |
+| 25 | P2 | Fresh uploads inferred media type from local path while mounts used logical path | Upload now uses `path.Ext(logicalPath)`; test proves upload and mount both emit CSV for a `.bin` local file mapped to `rows.csv`. |
+| 26 | P2 | Row readers decoded malformed/huge records after `MaxRows` | CSV uses an inspectable physical-line source; NDJSON inspects only buffered/non-whitespace data; JSON arrays stop after `More`. All formats return a one-row truncated sample despite malformed record two. |
+| 27 | P2 | Dataset push accepted FIFO/device/socket inputs | Require `os.Stat(...).Mode().IsRegular()` before opening a draft; character-device rejection and regular-file symlink acceptance tested. |
+| 28 | P1 | Global cancellation-as-success hid interrupted finite work | `ExitOn` now treats cancellation as exit 1; only follow converts its intentional stop to nil. Cancellation and follow tests pass. |
+| 29 | P2 | Archive mode ignored default verification | Resolve/pin the manifest, parse tar while copying canonical bytes, verify membership/type/size/digest for every file, and publish only on success. Valid/mismatch atomic tests added. |
+| 30 | P2 | Companion build/seeder failures became integration skips | Resolve module availability separately; absent standalone companion skips, but present-workspace build/seed failures are fatal. Both modes tested. |
+
 ## Additional takeover fixes
 
 - Enabled the repository dependency graph through the GitHub API. `GET /dependency-graph/sbom` now succeeds; the
@@ -166,6 +179,7 @@ Fresh after remediation:
 - go-go-datadrop: `GOWORK=off go test ./... -count=1` — pass, including 53s admin smoke and authz/server suites.
 - workspace after first pass: `go test ./cmd/hyperslop -run TestHyperslop -count=1 -v` — pass, including the 48s real-server full path and exit 1/2/3/4/5 behavior.
 - workspace after second pass: the same real-server suite passed in 77.906s; go-go-datadrop's full standalone suite passed with its 84.173s binary package.
+- workspace after third pass: real-server suite passed in 71.309s; go-go-datadrop full standalone suite passed with its 72.264s binary package.
 - both repositories: `golangci-lint run ./...`, `go vet ./...`, and `gofmt` — clean.
 - hyperslop-cli: logcopter check, no-reverse-dependency guard, `goreleaser check`, snapshot build, and fresh-GOBIN install — pass.
 
@@ -180,10 +194,10 @@ Fresh after remediation:
 
 ### Remaining before merge/release
 
-1. First-pass coordinated branches are pushed; second-pass fix `a6c755a` awaits push with this documentation update.
+1. First and second review passes are pushed/resolved; third-pass fix `2114ac6` awaits push with this documentation update.
 2. Wait for all PR checks on the new head.
-3. Reply to and resolve the seven fresh-review threads only after GitHub sees the fixing commit and checks pass.
-4. Request one final fresh review of the second-pass head; do not assume a fix pass cannot introduce another edge case.
+3. Reply to and resolve the seven third-review threads only after GitHub sees the fixing commit and checks pass.
+4. Request another fresh review of the third-pass head; continue until a pass reports no findings.
 5. Do not tag/release from the PR branch. Phase 9 still requires merge sequencing, confirmed Homebrew/Fury destinations and release secrets, then a tagged hyperslop-cli version before removing go-go-datadrop's local replace.
 
 ## References
@@ -191,6 +205,7 @@ Fresh after remediation:
 - PR: <https://github.com/hyperslop-systems/hyperslop-cli/pull/1>
 - First-pass fix: `1871472`
 - Second-pass fix: `a6c755a`
+- Third-pass fix: `2114ac6`
 - Companion admin/server fix: `7647177`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`

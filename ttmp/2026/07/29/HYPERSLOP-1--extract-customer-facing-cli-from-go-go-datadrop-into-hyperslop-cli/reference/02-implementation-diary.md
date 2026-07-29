@@ -694,3 +694,127 @@ whole-version loop.
 - New comments: `3676929577`, `3676929581`, `3676929589`, `3676929593`,
   `3676929598`, `3676929599`, `3676929601`.
 - Findings: 2 P1, 5 P2; none deferred.
+
+## Step 12: Third PR review — stream, bounded-read, archive, and integration hardening
+
+Requested another fresh review after second-pass fixes were green and resolved.
+Review `4811762131` on head `8653727` found seven more valid issues: retry
+classification for established SSE reads, logical-path media types, bounded
+reader behavior, non-regular upload inputs, cancellation semantics, archive
+verification, and overly broad integration-test skips.
+
+Implemented all seven and reran the complete validation matrix. This pass moved
+beyond extraction-specific bugs into general reliability properties: finite work
+must fail on cancellation, sampling must not parse data outside its budget, and
+integration tests must distinguish unavailable dependencies from broken ones.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 10)
+
+**Assistant interpretation:** Continue iterative takeover review until no known findings remain; treat new valid findings as part of making PR #1 genuinely ready.
+
+**Inferred user intent:** Obtain a deeply reviewed, failure-safe CLI rather than stopping after the first automated review turns green.
+
+**Commit (code):** `2114ac6` — "fix(HYPERSLOP-1): address third-pass PR review findings"
+
+### What I did
+
+- Added typed `client.StreamReadError`; follow reconnects on read/transport failure
+  while malformed JSON remains fatal.
+- Made upload and mount Content-Type derive from the logical dataset path.
+- Reworked CSV/NDJSON/JSON row caps to detect extra input without decoding the
+  out-of-budget record.
+- Rejected non-regular push inputs while allowing symlinks to regular files.
+- Removed global cancellation-as-success; follow retains its local success path.
+- Added verified archive streaming: pin numeric version, parse tar, verify every
+  manifest file's membership/type/size/SHA-256, and publish atomically.
+- Split companion availability detection from build/seeder execution so only a
+  genuinely absent module skips integration tests.
+- Added tests for every finding and ran the full validation matrix.
+
+### Why
+
+- Long-lived SSE transports commonly fail with read errors, not clean EOF.
+- Dataset metadata must not depend on deduplication state.
+- A row budget is a resource boundary, not merely an output truncation step.
+- Special files can block forever or change between hash and upload.
+- Interrupted finite output is incomplete and must not exit 0.
+- `--archive` promised verification but previously made `--no-verify` meaningless.
+- Broad skips can make a broken companion integration appear green.
+
+### What worked
+
+- Targeted parser/follow, media type, row cap, input type, exit, archive, and
+  standalone/workspace smoke tests all passed.
+- hyperslop-cli full standalone suite and lint/vet/gofmt passed.
+- go-go-datadrop full standalone suite passed, including 72.264s binary package;
+  lint/vet/gofmt passed.
+- Real-server hyperslop suite passed in 71.309s.
+- no-cycle, logcopter, and GoReleaser checks passed.
+
+### What didn't work
+
+- After removing the cancellation special case, I also removed the `context`
+  import from `exit.go`, overlooking that wrapper method signatures still use
+  `context.Context`. Exact failure:
+
+  `pkg/cli/exit.go:149:6: undefined: context`
+
+  `pkg/cli/exit.go:161:6: undefined: context`
+
+  `pkg/cli/exit.go:172:39: undefined: context`
+
+  Restored the import and reran the targeted tests successfully.
+
+### What I learned
+
+- Retry policy needs typed error provenance; matching error text cannot reliably
+  distinguish transport failures from malformed protocol frames.
+- A limit must be enforced before decoding the next value. Exact-cap detection
+  requires format-aware peeking, not one extra full decode.
+- Integrity for a container format is entry-level, not a hash of an unpublished
+  aggregate unless the server supplies such a hash.
+- Skip conditions belong at dependency discovery; failures after discovery are regressions.
+
+### What was tricky to build
+
+- CSV uses an internal buffered reader. A physical-line-bounded source prevents
+  inaccessible prefetch while still supporting quoted records spanning lines;
+  NDJSON combines `decoder.Buffered()` with the underlying reader; JSON arrays
+  can rely on `More()`.
+- Archive verification had to preserve server tar bytes while inspecting entries.
+  `io.TeeReader` feeds both the destination and `tar.Reader`; file bodies are
+  hashed as the parser consumes them, with temp publication handled separately.
+- Stream errors needed a type wrapping the original error so `errors.As` can
+  drive retry without flattening the cause.
+
+### What warrants a second pair of eyes
+
+- Review `physicalLineReader` against unusual CSV records and performance on very
+  long physical lines.
+- Review archive policy for unexpected non-file entries and stdout behavior on a
+  late verification failure (nonzero exit but already-streamed bytes).
+- Review whether cancellation should eventually have a dedicated exit code; the
+  current documented contract maps it to generic error 1.
+
+### What should be done in the future
+
+- Push `2114ac6` plus docs, wait for checks, resolve seven threads, and request
+  another review. Continue until a review pass reports no suggestions.
+- Phase 9 release remains after merge and external-secret/package confirmation.
+
+### Code review instructions
+
+- Streaming: `pkg/client/client.go`, `pkg/cli/events/tail.go` and tests.
+- Bounded reads: `pkg/tabular/rows.go`, malformed-record cap tests.
+- Archive: `pkg/cli/dataset/get.go`, `TestDownloadArchiveVerifiesEntriesBeforePublication`.
+- Integration gating: `cmd/hyperslop/smoke_test.go`.
+- Run the full matrix from Step 10.
+
+### Technical details
+
+- Third review ID: `4811762131`; reviewed head `8653727301f068718483f9747863050d35bafc7a`.
+- New comments: `3677123924`, `3677123929`, `3677123935`, `3677123941`,
+  `3677123946`, `3677123955`, `3677123964`.
+- Findings: 3 P1, 4 P2; none deferred.

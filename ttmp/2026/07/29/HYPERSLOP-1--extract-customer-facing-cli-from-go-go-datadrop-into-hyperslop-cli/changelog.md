@@ -89,3 +89,14 @@ Fresh PR #1 review on head 50407db found seven additional valid edge cases (2 P1
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/events/export.go — transactional export publication
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/tabular/flatten.go — complete injective path encoding including empty segments
 
+
+## 2026-07-29
+
+Third PR #1 review on head 8653727 found seven additional valid findings (3 P1, 4 P2). Fixed all in 2114ac6: transient SSE read retries, logical media types, pre-decode row caps, regular upload inputs, finite cancellation failure, verified archives, and strict companion integration gating. Full two-repo tests, 71s live smoke, lint/vet/gofmt/no-cycle/logcopter/GoReleaser pass.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — manifest-verified archive download
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/client/client.go — typed reconnectable SSE read errors
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/tabular/rows.go — format-aware bounded sampling
+
