@@ -7,6 +7,34 @@ import (
 	"testing"
 )
 
+func TestResolvePushFilesRejectsNonRegularInput(t *testing.T) {
+	if _, err := os.Stat("/dev/null"); err != nil {
+		t.Skip("platform has no /dev/null device")
+	}
+	if _, err := resolvePushFiles([]string{"/dev/null:device"}, false); err == nil {
+		t.Fatal("resolvePushFiles accepted a character device")
+	}
+}
+
+func TestResolvePushFilesAllowsSymlinkToRegularFile(t *testing.T) {
+	directory := t.TempDir()
+	target := filepath.Join(directory, "target.csv")
+	link := filepath.Join(directory, "link.csv")
+	if err := os.WriteFile(target, []byte("a\n1\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	files, err := resolvePushFiles([]string{link + ":data.csv"}, false)
+	if err != nil {
+		t.Fatalf("resolvePushFiles rejected symlink to regular file: %v", err)
+	}
+	if len(files) != 1 || files[0].LogicalPath != "data.csv" {
+		t.Fatalf("files = %+v", files)
+	}
+}
+
 func TestBuildCommitRequestAppliesOverridesToNullManifest(t *testing.T) {
 	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
 	if err := os.WriteFile(manifestPath, []byte("null\n"), 0o600); err != nil {

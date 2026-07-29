@@ -27,10 +27,10 @@ import (
 // the "hyperslop: " diagnostic prefix — the parts of the CLI contract an
 // in-process test cannot see.
 //
-// The server-dependent tests skip gracefully when the datadrop server binary
-// cannot be built or a token cannot be seeded — i.e. when hyperslop-cli is
-// built standalone (GOWORK=off, no go-go-datadrop in the module graph), as in
-// hyperslop-cli's own CI. In the split-cli workspace they run for real.
+// The server-dependent tests skip only when the go-go-datadrop companion
+// module is genuinely absent (standalone GOWORK=off CI). Once the workspace
+// resolves that module, server build and token seeding failures are regressions
+// and fail the test rather than silently converting broken integration to skip.
 
 // seederSrc is a tiny main that opens the datadrop SQLite store, creates a
 // local user-owned ddp_ token (all scopes), and prints it. It is compiled and
@@ -88,24 +88,39 @@ func buildHyperslopClient(t *testing.T) string {
 	return binary
 }
 
-// buildDatadropServer compiles the datadrop server from the workspace. It skips
-// when the server cannot be built (standalone hyperslop-cli CI, GOWORK=off).
+// requireDatadropCompanion distinguishes a genuinely standalone checkout from
+// a broken companion module. go list -m only resolves module availability; it
+// does not compile packages, so a subsequent build error cannot be masked.
+func requireDatadropCompanion(t *testing.T) {
+	t.Helper()
+	list := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/go-go-golems/go-go-datadrop")
+	out, err := list.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		t.Skipf("go-go-datadrop companion module is not available (standalone test mode): %v", err)
+	}
+}
+
+// buildDatadropServer compiles the datadrop server from the resolved workspace
+// companion. Availability was checked separately, so compilation failure is a
+// real integration regression.
 func buildDatadropServer(t *testing.T) string {
 	t.Helper()
+	requireDatadropCompanion(t)
 	binary := filepath.Join(t.TempDir(), "datadrop-server")
 	build := exec.Command("go", "build", "-o", binary, "github.com/go-go-golems/go-go-datadrop/cmd/datadrop")
 	build.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Skipf("datadrop server binary not buildable in this build mode (needs the split-cli workspace): %v\n%s", err, out)
+		t.Fatalf("build resolved datadrop server companion: %v\n%s", err, out)
 	}
 	return binary
 }
 
 // seedToken creates a local ddp_ token in the database BEFORE the server opens
 // it, by compiling and running seederSrc with `go run` against the workspace.
-// Skips when go-go-datadrop/pkg/store is not resolvable (standalone CI).
+// Fails when the already-resolved companion's seeder no longer compiles or runs.
 func seedToken(t *testing.T, dbPath string) string {
 	t.Helper()
+	requireDatadropCompanion(t)
 	seeder := filepath.Join(t.TempDir(), "seeder_main.go")
 	if err := os.WriteFile(seeder, []byte(seederSrc), 0o600); err != nil {
 		t.Fatalf("write seeder: %v", err)
@@ -114,9 +129,9 @@ func seedToken(t *testing.T, dbPath string) string {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", "run", seeder, dbPath)
 	cmd.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Skipf("could not seed a token (needs the split-cli workspace with go-go-datadrop): %v", err)
+		t.Fatalf("seed token with resolved go-go-datadrop companion: %v\n%s", err, out)
 	}
 	token := strings.TrimSpace(string(out))
 	if !strings.HasPrefix(token, "ddp_") {

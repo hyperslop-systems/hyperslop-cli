@@ -202,6 +202,17 @@ func (c *Client) Export(
 	return resp.Body, nil
 }
 
+// StreamReadError reports a transport/read failure after an SSE response was
+// established. Callers may reconnect from their last cursor. Decode errors are
+// deliberately not this type: malformed frames are protocol failures and must
+// remain fatal instead of looping forever.
+type StreamReadError struct {
+	Err error
+}
+
+func (e *StreamReadError) Error() string { return e.Err.Error() }
+func (e *StreamReadError) Unwrap() error { return e.Err }
+
 // StreamEvent is one frame from the live feed.
 type StreamEvent struct {
 	// Name is the SSE event type: "append" or "reset".
@@ -330,7 +341,7 @@ func parseSSE(ctx context.Context, body io.Reader, frames chan<- StreamEvent) er
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 			return nil
 		}
-		return errors.Wrap(err, "client: read event stream")
+		return &StreamReadError{Err: errors.Wrap(err, "client: read event stream")}
 	}
 	return dispatch()
 }

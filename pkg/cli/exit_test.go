@@ -116,19 +116,20 @@ func TestExitOnUsesTheBinaryPrefix(t *testing.T) {
 	}
 }
 
-// Ctrl-C on a following tail is the user stopping something that was working,
-// not a failure. It must neither print nor exit non-zero.
-func TestExitOnIgnoresCancellation(t *testing.T) {
+// Cancellation of finite work is a failure: export/download stdout may already
+// be partial. tail --follow converts its own intentional stop to nil before it
+// reaches this global wrapper.
+func TestExitOnTreatsUnexpectedCancellationAsFailure(t *testing.T) {
 	code, stderr, returned := captureExit(t, context.Canceled)
 
-	if code != -1 {
-		t.Errorf("a cancelled context exited %d; it must not exit at all", code)
+	if code != ExitError {
+		t.Errorf("a cancelled operation exited %d, want %d", code, ExitError)
 	}
-	if stderr != "" {
-		t.Errorf("a cancelled context wrote %q to stderr", stderr)
+	if want := ErrorPrefix() + context.Canceled.Error() + "\n"; stderr != want {
+		t.Errorf("cancellation stderr = %q, want %q", stderr, want)
 	}
 	if returned != nil {
-		t.Errorf("a cancelled context returned %v, want nil", returned)
+		t.Errorf("ExitOn returned %v after its exit hook, want nil", returned)
 	}
 }
 

@@ -470,6 +470,28 @@ func TestFromRowsTruncates(t *testing.T) {
 	}
 }
 
+func TestFromRowsStopsBeforeDecodingMalformedRecordPastCap(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		format Format
+		body   string
+	}{
+		{"csv", FormatCSV, "v\n1\n\"unterminated"},
+		{"ndjson", FormatNDJSON, "{\"v\":1}\n{\"broken\":"},
+		{"json array", FormatJSON, `[{"v":1},{"broken":]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			table, err := FromRows(SourceRef{}, strings.NewReader(tc.body), tc.format, 1, nil)
+			if err != nil {
+				t.Fatalf("FromRows decoded malformed out-of-budget record: %v", err)
+			}
+			if !table.Truncated || table.RowCount != 1 {
+				t.Fatalf("table = %+v, want one-row truncated sample", table)
+			}
+		})
+	}
+}
+
 // Exactly-at-the-cap must not be reported as truncated: a file with five rows
 // read with a cap of five was read completely.
 func TestFromRowsExactlyAtTheCapIsNotTruncated(t *testing.T) {

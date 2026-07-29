@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"archive/tar"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -122,9 +123,7 @@ func (c *GetCommand) Run(ctx context.Context, vals *values.Values) error {
 	}
 
 	if s.Archive {
-		return streamToDestination(s.Output, s.Force, "", false, func() (io.ReadCloser, error) {
-			return api.DownloadDatasetArchive(ctx, s.Drop, s.Dataset, s.Version)
-		})
+		return downloadArchive(ctx, api, s)
 	}
 
 	if s.File != "" {
@@ -135,6 +134,30 @@ func (c *GetCommand) Run(ctx context.Context, vals *values.Values) error {
 		return errors.New("--output DIRECTORY is required when downloading a whole version")
 	}
 	return downloadVersion(ctx, api, s)
+}
+
+// downloadArchive downloads a tar stream and, by default, verifies every
+// files/... entry against the resolved version manifest before publication.
+func downloadArchive(ctx context.Context, api *client.Client, s *getSettings) error {
+	version := s.Version
+	if s.NoVerify {
+		return streamToDestination(s.Output, s.Force, "", false, func() (io.ReadCloser, error) {
+			return api.DownloadDatasetArchive(ctx, s.Drop, s.Dataset, version)
+		})
+	}
+
+	found, err := api.GetDatasetVersion(ctx, s.Drop, s.Dataset, s.Version)
+	if err != nil {
+		return err
+	}
+	version = strconv.Itoa(found.Version)
+	return streamToDestinationWithCopier(s.Output, s.Force,
+		func() (io.ReadCloser, error) {
+			return api.DownloadDatasetArchive(ctx, s.Drop, s.Dataset, version)
+		},
+		func(dst io.Writer, body io.Reader) error {
+			return copyVerifiedDatasetArchive(dst, body, found.Files)
+		})
 }
 
 // downloadSingleFile downloads one file. Unless --no-verify was requested, it
@@ -333,14 +356,29 @@ func streamToDestination(
 	if verify && expectedDigest == "" {
 		return errors.New("cannot verify download without an expected digest")
 	}
+	return streamToDestinationWithCopier(output, force, open,
+		func(dst io.Writer, body io.Reader) error {
+			return copyDownloadedContent(dst, body, expectedDigest, verify)
+		})
+}
 
+// streamToDestinationWithCopier owns destination safety while copier owns the
+// stream's integrity model (whole-body digest, verified tar entries, or plain
+// copy). File outputs are always staged and published only after copier returns
+// success; stdout remains streaming and reports a nonzero exit on late failure.
+func streamToDestinationWithCopier(
+	output string,
+	force bool,
+	open func() (io.ReadCloser, error),
+	copier func(io.Writer, io.Reader) error,
+) error {
 	if output == "" || output == "-" {
 		body, err := open()
 		if err != nil {
 			return err
 		}
 		defer func() { _ = body.Close() }()
-		return copyDownloadedContent(os.Stdout, body, expectedDigest, verify)
+		return copier(os.Stdout, body)
 	}
 
 	if info, err := os.Lstat(output); err == nil {
@@ -377,7 +415,7 @@ func streamToDestination(
 	}
 	defer func() { _ = body.Close() }()
 
-	if err := copyDownloadedContent(temp, body, expectedDigest, verify); err != nil {
+	if err := copier(temp, body); err != nil {
 		return err
 	}
 	if err := temp.Sync(); err != nil {
@@ -406,6 +444,80 @@ func streamToDestination(
 		}
 	}
 	published = true
+	return nil
+}
+
+func copyVerifiedDatasetArchive(
+	dst io.Writer, body io.Reader, files []datadrop.DatasetFile,
+) error {
+	expected := make(map[string]datadrop.DatasetFile, len(files))
+	for _, file := range files {
+		expected[file.Path] = file
+	}
+	seen := make(map[string]struct{}, len(files))
+
+	// Tee preserves the server's canonical tar bytes exactly while tar.Reader
+	// validates framing and exposes each file for digest verification.
+	tee := io.TeeReader(body, dst)
+	archive := tar.NewReader(tee)
+	for {
+		header, err := archive.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return errors.Wrap(err, "verify dataset archive")
+		}
+
+		if header.Name == "manifest.json" || header.Name == "schema.json" {
+			if _, err := io.Copy(io.Discard, archive); err != nil {
+				return errors.Wrapf(err, "read archive entry %s", header.Name)
+			}
+			continue
+		}
+		if !strings.HasPrefix(header.Name, "files/") {
+			return errors.Errorf("dataset archive contains unexpected entry %q", header.Name)
+		}
+		logicalPath := strings.TrimPrefix(header.Name, "files/")
+		file, ok := expected[logicalPath]
+		if !ok {
+			return errors.Errorf("dataset archive contains file %q absent from the version manifest", logicalPath)
+		}
+		if _, duplicate := seen[logicalPath]; duplicate {
+			return errors.Errorf("dataset archive contains duplicate file %q", logicalPath)
+		}
+		if !header.FileInfo().Mode().IsRegular() {
+			return errors.Errorf("dataset archive entry %q is not a regular file", header.Name)
+		}
+
+		hasher := sha256.New()
+		size, err := io.Copy(hasher, archive)
+		if err != nil {
+			return errors.Wrapf(err, "read archive file %s", logicalPath)
+		}
+		if size != file.SizeBytes {
+			return errors.Errorf("integrity check failed for %s: archive has %d bytes, manifest says %d",
+				logicalPath, size, file.SizeBytes)
+		}
+		actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+		if actualDigest != file.Digest {
+			return errors.Errorf(
+				"integrity check failed for %s: content hashes to %s, manifest says %s",
+				logicalPath, actualDigest, file.Digest)
+		}
+		seen[logicalPath] = struct{}{}
+	}
+
+	// Preserve any legal trailing tar padding/bytes the reader did not need to
+	// inspect so output remains byte-for-byte the server's stream.
+	if _, err := io.Copy(io.Discard, tee); err != nil {
+		return errors.Wrap(err, "finish dataset archive")
+	}
+	for logicalPath := range expected {
+		if _, ok := seen[logicalPath]; !ok {
+			return errors.Errorf("dataset archive is missing manifest file %q", logicalPath)
+		}
+	}
 	return nil
 }
 

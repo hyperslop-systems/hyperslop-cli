@@ -181,8 +181,8 @@ func resolvePushFiles(files []string, flatten bool) ([]client.PushFile, error) {
 		}
 		if info, err := os.Stat(local); err != nil {
 			return nil, errors.Wrapf(err, "--file %q", entry)
-		} else if info.IsDir() {
-			return nil, errors.Errorf("--file %q is a directory; pass individual files", entry)
+		} else if !info.Mode().IsRegular() {
+			return nil, errors.Errorf("--file %q is not a regular file", entry)
 		}
 		if previous, duplicate := seen[logical]; duplicate {
 			return nil, errors.Errorf("two files map to the same dataset path %q: %q and %q",

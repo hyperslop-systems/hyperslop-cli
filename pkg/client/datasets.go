@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -126,7 +125,7 @@ func (c *Client) UploadDatasetFile(
 	// Setting ContentLength lets the transport avoid chunked encoding, and lets
 	// the server's size cap reject an oversized upload before reading it.
 	req.ContentLength = info.Size()
-	if mediaType := mime.TypeByExtension(filepath.Ext(localPath)); mediaType != "" {
+	if mediaType := mime.TypeByExtension(path.Ext(logicalPath)); mediaType != "" {
 		req.Header.Set("Content-Type", mediaType)
 	}
 	if c.Token != "" {

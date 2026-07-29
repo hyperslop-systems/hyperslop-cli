@@ -1,6 +1,8 @@
 package dataset
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -218,6 +220,105 @@ func TestStreamToDestinationForcePreservesExistingFileOnDigestMismatch(t *testin
 	}
 	assertFileContent(t, target, "original")
 	assertNoDownloadTemps(t, filepath.Dir(target))
+}
+
+func TestDownloadArchiveVerifiesEntriesBeforePublication(t *testing.T) {
+	const (
+		logicalPath = "data/readings.csv"
+		expected    = "temperature\n21.7\n"
+	)
+	for _, tc := range []struct {
+		name        string
+		archiveBody []byte
+		wantError   bool
+	}{
+		{"valid", makeDatasetArchive(t, logicalPath, expected), false},
+		{"digest mismatch", makeDatasetArchive(t, logicalPath, "temperature\n99.9\n"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requested := make(chan string, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v1/drops/greenhouse/datasets/readings/versions/latest":
+					_ = json.NewEncoder(w).Encode(datadrop.DatasetVersion{
+						Drop: "greenhouse", Dataset: "readings", Version: 7,
+						Files: []datadrop.DatasetFile{{
+							Path: logicalPath, Digest: digestString(expected), SizeBytes: int64(len(expected)),
+						}},
+					})
+				case "/v1/drops/greenhouse/datasets/readings/versions/7/archive":
+					requested <- r.URL.Path
+					_, _ = w.Write(tc.archiveBody)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			api, err := client.New(server.URL, "token")
+			if err != nil {
+				t.Fatalf("client.New: %v", err)
+			}
+			target := filepath.Join(t.TempDir(), "version.tar")
+			if err := os.WriteFile(target, []byte("original"), 0o600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			err = downloadArchive(context.Background(), api, &getSettings{
+				Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion,
+				Archive: true, Output: target, Force: true,
+			})
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "integrity check failed") {
+					t.Fatalf("downloadArchive error = %v, want integrity failure", err)
+				}
+				assertFileContent(t, target, "original")
+			} else {
+				if err != nil {
+					t.Fatalf("downloadArchive: %v", err)
+				}
+				got, readErr := os.ReadFile(target)
+				if readErr != nil {
+					t.Fatalf("ReadFile: %v", readErr)
+				}
+				if !bytes.Equal(got, tc.archiveBody) {
+					t.Fatal("published archive differs from the server's canonical bytes")
+				}
+			}
+			select {
+			case path := <-requested:
+				if !strings.Contains(path, "/versions/7/") {
+					t.Fatalf("archive request was not pinned: %s", path)
+				}
+			default:
+				t.Fatal("archive endpoint was not requested")
+			}
+			assertNoDownloadTemps(t, filepath.Dir(target))
+		})
+	}
+}
+
+func makeDatasetArchive(t *testing.T, logicalPath, content string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := tar.NewWriter(&buffer)
+	for _, entry := range []struct {
+		name, content string
+	}{
+		{"manifest.json", `{}`},
+		{"files/" + logicalPath, content},
+	} {
+		header := &tar.Header{Name: entry.name, Mode: 0o644, Size: int64(len(entry.content))}
+		if err := writer.WriteHeader(header); err != nil {
+			t.Fatalf("WriteHeader: %v", err)
+		}
+		if _, err := io.WriteString(writer, entry.content); err != nil {
+			t.Fatalf("write archive entry: %v", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	return buffer.Bytes()
 }
 
 func TestDownloadSingleFileVerifiesResolvedVersionBeforePublication(t *testing.T) {

@@ -3,11 +3,13 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/pkg/errors"
@@ -364,6 +366,24 @@ func TestParseSSE(t *testing.T) {
 	}
 	if collected[2].Reset.Reason != "slow_consumer" || collected[2].Reset.Cursor != 2 {
 		t.Fatalf("reset frame = %+v", collected[2].Reset)
+	}
+}
+
+func TestParseSSETypifiesReadErrorsButNotDecodeErrors(t *testing.T) {
+	readFailure := io.MultiReader(strings.NewReader(": heartbeat\n\n"), iotest.ErrReader(io.ErrUnexpectedEOF))
+	err := parseSSE(context.Background(), readFailure, make(chan StreamEvent, 1))
+	var streamReadErr *StreamReadError
+	if !errors.As(err, &streamReadErr) {
+		t.Fatalf("read error = %T %v, want *StreamReadError", err, err)
+	}
+
+	decodeFailure := strings.NewReader("event: append\ndata: not-json\n\n")
+	err = parseSSE(context.Background(), decodeFailure, make(chan StreamEvent, 1))
+	if err == nil {
+		t.Fatal("parseSSE accepted malformed frame JSON")
+	}
+	if errors.As(err, &streamReadErr) {
+		t.Fatalf("decode error was classified as reconnectable: %v", err)
 	}
 }
 

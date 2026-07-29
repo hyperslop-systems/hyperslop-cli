@@ -254,11 +254,27 @@ func followStreamWithWait(
 			}
 		}
 
-		if err := <-errs; err != nil {
+		if streamErr := <-errs; streamErr != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return err
+			var readErr *client.StreamReadError
+			if !errors.As(streamErr, &readErr) {
+				// Malformed frame JSON and projection failures are protocol/data
+				// errors. Reconnecting would replay the same bad frame forever.
+				return streamErr
+			}
+			if sawFrame {
+				reconnectDelay = streamReconnectInitial
+			}
+			if err := waitFor(ctx, reconnectDelay); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+			reconnectDelay = nextReconnectDelay(reconnectDelay)
+			continue
 		}
 		if ctx.Err() != nil {
 			return nil

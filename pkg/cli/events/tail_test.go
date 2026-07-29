@@ -2,11 +2,14 @@ package events
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
@@ -122,6 +125,53 @@ func TestFollowStreamReconnectsAfterCleanEOFWithCursor(t *testing.T) {
 	if len(waits) != 1 || waits[0] != streamReconnectInitial {
 		t.Fatalf("reconnect waits = %v, want [%v]", waits, streamReconnectInitial)
 	}
+}
+
+func TestFollowStreamReconnectsAfterTransientReadError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	requests := 0
+	api, err := client.New("http://stream.example", "")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	api.HTTP = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests++
+		var body io.ReadCloser
+		if requests == 1 {
+			body = io.NopCloser(io.MultiReader(
+				strings.NewReader(": heartbeat\n\n"),
+				iotest.ErrReader(io.ErrUnexpectedEOF),
+			))
+		} else {
+			cancel()
+			body = io.NopCloser(strings.NewReader(""))
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: body, Header: make(http.Header)}, nil
+	})}
+
+	var waits []time.Duration
+	err = followStreamWithWait(ctx, nil, api, "greenhouse", datadrop.DefaultStream, 9,
+		func(_ context.Context, delay time.Duration) error {
+			waits = append(waits, delay)
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("followStreamWithWait: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("stream requests = %d, want reconnect after read failure", requests)
+	}
+	if len(waits) != 1 || waits[0] != streamReconnectInitial {
+		t.Fatalf("reconnect waits = %v, want [%v]", waits, streamReconnectInitial)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
 }
 
 func TestNextReconnectDelayIsBounded(t *testing.T) {

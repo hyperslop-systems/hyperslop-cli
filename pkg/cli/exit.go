@@ -82,19 +82,17 @@ var errSink io.Writer = os.Stderr
 
 // ExitOn maps err onto the documented exit codes, reports it, and exits.
 //
-// It returns an error only for the errors that must be handed back untouched:
-// nil, a cancelled context (Ctrl-C is not a failure), and
-// *cmds.ExitWithoutGlazeError, which glazed's builder interprets as "exit 0".
+// It returns an error only for the signals that must be handed back untouched:
+// nil and *cmds.ExitWithoutGlazeError, which glazed's builder interprets as
+// "exit 0". A command-specific long-running loop such as tail --follow may
+// convert its own intentional cancellation to nil; cancellation of finite work
+// remains a failure because its output may be incomplete.
 // Everything else terminates the process here, which is the point.
 func ExitOn(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	// Ctrl-C on `tail --follow` is the user stopping a thing that was working.
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
 	var exitWithoutGlaze *cmds.ExitWithoutGlazeError
 	if errors.As(err, &exitWithoutGlaze) {
 		return err

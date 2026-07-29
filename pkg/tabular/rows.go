@@ -1,6 +1,7 @@
 package tabular
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"io"
@@ -110,7 +111,12 @@ func ReadRows(r io.Reader, format Format, opts ReadOptions, emit RowEmitter) (bo
 
 // ReadCSVRows turns each data row into a JSON object keyed by the header.
 func ReadCSVRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, error) {
-	reader := csv.NewReader(body)
+	// Bound each underlying read to one physical line. encoding/csv wraps its
+	// input in an internal bufio.Reader; without this boundary it may prefetch
+	// the record after MaxRows into an inaccessible buffer, forcing us to decode
+	// that record merely to distinguish exact-cap from truncated input.
+	source := newPhysicalLineReader(body)
+	reader := csv.NewReader(source)
 	// Rows are allowed to differ in length; a short or long row is a data
 	// problem to report, not a parse error that aborts the file.
 	reader.FieldsPerRecord = -1
@@ -140,15 +146,15 @@ func ReadCSVRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, error
 
 	row := 0
 	for {
+		if row >= opts.MaxRows {
+			return source.hasAdditionalData(), nil
+		}
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
 			return false, nil
 		}
 		if err != nil {
 			return false, errors.Wrapf(err, "read CSV row %d", row+1)
-		}
-		if row >= opts.MaxRows {
-			return true, nil
 		}
 		row++
 
@@ -177,6 +183,74 @@ func ReadCSVRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, error
 			return false, err
 		}
 	}
+}
+
+type physicalLineReader struct {
+	reader      *bufio.Reader
+	pending     []byte
+	terminalErr error
+}
+
+func newPhysicalLineReader(source io.Reader) *physicalLineReader {
+	return &physicalLineReader{reader: bufio.NewReader(source)}
+}
+
+func (r *physicalLineReader) Read(dst []byte) (int, error) {
+	if len(r.pending) == 0 {
+		if r.terminalErr != nil {
+			err := r.terminalErr
+			r.terminalErr = nil
+			return 0, err
+		}
+		line, err := r.reader.ReadBytes('\n')
+		r.pending = line
+		r.terminalErr = err
+		if len(r.pending) == 0 {
+			terminalErr := r.terminalErr
+			r.terminalErr = nil
+			return 0, terminalErr
+		}
+	}
+	n := copy(dst, r.pending)
+	r.pending = r.pending[n:]
+	return n, nil
+}
+
+func (r *physicalLineReader) hasAdditionalData() bool {
+	for _, b := range r.pending {
+		if !isJSONWhitespace(b) {
+			return true
+		}
+	}
+	if r.terminalErr != nil {
+		return r.terminalErr != io.EOF
+	}
+	return hasNonWhitespace(r.reader)
+}
+
+func hasAdditionalJSONData(decoder *json.Decoder, source io.Reader) bool {
+	return hasNonWhitespace(io.MultiReader(decoder.Buffered(), source))
+}
+
+// hasNonWhitespace intentionally treats a read error as "more data" once the
+// row budget is satisfied. The sample is already complete; failing because the
+// out-of-budget suffix reset its connection would violate the same boundary as
+// decoding a malformed suffix. Marking the result truncated is conservative.
+func hasNonWhitespace(source io.Reader) bool {
+	var one [1]byte
+	for {
+		n, err := source.Read(one[:])
+		if n > 0 && !isJSONWhitespace(one[0]) {
+			return true
+		}
+		if err != nil {
+			return err != io.EOF
+		}
+	}
+}
+
+func isJSONWhitespace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }
 
 func validateCSVColumns(columns []string) error {
@@ -230,6 +304,12 @@ func ReadNDJSONRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, er
 
 	row := 0
 	for {
+		if row >= opts.MaxRows {
+			// decoder.Buffered holds bytes read ahead while decoding the last
+			// accepted record. Inspect only until the first non-whitespace byte;
+			// do not decode or allocate the next document.
+			return hasAdditionalJSONData(decoder, body), nil
+		}
 		var payload json.RawMessage
 		err := decoder.Decode(&payload)
 		if errors.Is(err, io.EOF) {
@@ -237,9 +317,6 @@ func ReadNDJSONRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool, er
 		}
 		if err != nil {
 			return false, errors.Wrapf(err, "decode NDJSON record %d", row+1)
-		}
-		if row >= opts.MaxRows {
-			return true, nil
 		}
 		row++
 
@@ -271,12 +348,15 @@ func ReadJSONArrayRows(body io.Reader, opts ReadOptions, emit RowEmitter) (bool,
 
 	row := 0
 	for decoder.More() {
+		if row >= opts.MaxRows {
+			// More has established that another array element exists without
+			// decoding it. Return immediately even if that element is malformed
+			// or enormous: it is outside the requested sample.
+			return true, nil
+		}
 		var payload json.RawMessage
 		if err := decoder.Decode(&payload); err != nil {
 			return false, errors.Wrapf(err, "decode JSON element %d", row+1)
-		}
-		if row >= opts.MaxRows {
-			return true, nil
 		}
 		row++
 
