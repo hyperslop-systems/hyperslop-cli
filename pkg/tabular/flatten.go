@@ -1,12 +1,13 @@
 package tabular
 
 import (
-	"bytes"
 	"encoding/json"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 )
 
 // Flattening rules, pinned so that two consumers agree:
@@ -36,13 +37,11 @@ func flatten(prefix string, raw json.RawMessage, emit leafFunc) error {
 		return nil
 	}
 
-	var value any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
 	// Keep 1e9 and 12345678901234567 exact rather than round-tripping through
 	// float64, which would silently lose the last digits of a nanosecond
 	// timestamp or a large identifier.
-	decoder.UseNumber()
-	if err := decoder.Decode(&value); err != nil {
+	value, err := jsondoc.Value(raw)
+	if err != nil {
 		return errors.Wrap(err, "decode payload")
 	}
 	return flattenValue(prefix, value, emit)

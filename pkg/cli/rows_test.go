@@ -133,6 +133,19 @@ func TestRowForEnvelopeCarriesMeta(t *testing.T) {
 // A page is projected in one call so that every row carries the same keys, even
 // when one event's payload is missing a field another one has. Projecting event
 // by event would give the first row three columns and the second row four.
+func TestDecodeJSONPreservesExactNumbers(t *testing.T) {
+	raw := json.RawMessage(`{"sample_id":9007199254740993,"resolution":0.123456789012345678901}`)
+	encoded, err := json.Marshal(decodeJSON(raw))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, exact := range []string{"9007199254740993", "0.123456789012345678901"} {
+		if !strings.Contains(string(encoded), exact) {
+			t.Errorf("projected JSON %s lost %s", encoded, exact)
+		}
+	}
+}
+
 func TestRowsForEnvelopesShareColumns(t *testing.T) {
 	rows, err := RowsForEnvelopes([]datadrop.Envelope{
 		{ID: "a", Data: json.RawMessage(`{"temp_c":21.7}`)},

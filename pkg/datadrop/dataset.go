@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 )
 
 // VersionState is the commit boundary of a dataset version.
@@ -110,8 +112,8 @@ func ParseManifest(raw json.RawMessage) (Manifest, error) {
 
 	// Reject a non-object document explicitly. Unmarshalling an array into a
 	// struct produces a confusing error about the wrong Go type.
-	var probe any
-	if err := json.Unmarshal([]byte(trimmed), &probe); err != nil {
+	probe, err := jsondoc.Value([]byte(trimmed))
+	if err != nil {
 		return Manifest{}, errors.Wrap(err, "invalid manifest: not valid JSON")
 	}
 	if _, isObject := probe.(map[string]any); !isObject {

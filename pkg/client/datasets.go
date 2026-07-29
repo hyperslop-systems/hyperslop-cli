@@ -218,9 +218,10 @@ type PushResult struct {
 // PushDataset publishes a new version: open a draft, upload or mount each file,
 // then commit.
 //
-// Each file is hashed locally first so the server can be asked whether it
-// already holds those bytes. That one local read is what turns a republish with
-// one changed file into a single upload.
+// Each file is copied into a private temporary snapshot while it is hashed.
+// Cache lookup, mount, and upload then refer to those immutable captured bytes,
+// so a concurrent writer cannot make the digest describe one state while the
+// transfer or mount publishes another.
 func (c *Client) PushDataset(
 	ctx context.Context, drop, dataset string, files []PushFile, req datadrop.CommitVersionRequest,
 ) (PushResult, error) {
@@ -235,32 +236,17 @@ func (c *Client) PushDataset(
 
 	result := PushResult{}
 	for _, file := range files {
-		digest, size, err := HashFile(file.LocalPath)
+		mounted, size, err := c.pushDatasetFile(ctx, drop, dataset, version.Version, file)
 		if err != nil {
 			return result, err
 		}
-
-		exists, err := c.BlobExists(ctx, digest)
-		if err != nil {
-			return result, err
-		}
-
-		if exists {
-			if _, err := c.MountDatasetFile(ctx, drop, dataset, version.Version,
-				file.LogicalPath, digest); err != nil {
-				return result, errors.Wrapf(err, "mount %s", file.LogicalPath)
-			}
+		if mounted {
 			result.Mounted++
 			result.BytesSkipped += size
-			continue
+		} else {
+			result.Uploaded++
+			result.BytesSent += size
 		}
-
-		if _, err := c.UploadDatasetFile(ctx, drop, dataset, version.Version,
-			file.LogicalPath, file.LocalPath, digest); err != nil {
-			return result, errors.Wrapf(err, "upload %s", file.LogicalPath)
-		}
-		result.Uploaded++
-		result.BytesSent += size
 	}
 
 	committed, err := c.CommitDatasetVersion(ctx, drop, dataset, version.Version, req)
@@ -269,6 +255,97 @@ func (c *Client) PushDataset(
 	}
 	result.Version = committed
 	return result, nil
+}
+
+func (c *Client) pushDatasetFile(
+	ctx context.Context, drop, dataset string, version int, file PushFile,
+) (bool, int64, error) {
+	snapshot, err := snapshotFile(ctx, file.LocalPath)
+	if err != nil {
+		return false, 0, err
+	}
+	defer func() { _ = os.Remove(snapshot.path) }()
+
+	exists, err := c.BlobExists(ctx, snapshot.digest)
+	if err != nil {
+		return false, 0, err
+	}
+	if exists {
+		if _, err := c.MountDatasetFile(ctx, drop, dataset, version,
+			file.LogicalPath, snapshot.digest); err != nil {
+			return false, 0, errors.Wrapf(err, "mount %s", file.LogicalPath)
+		}
+		return true, snapshot.size, nil
+	}
+	if _, err := c.UploadDatasetFile(ctx, drop, dataset, version,
+		file.LogicalPath, snapshot.path, snapshot.digest); err != nil {
+		return false, 0, errors.Wrapf(err, "upload %s", file.LogicalPath)
+	}
+	return false, snapshot.size, nil
+}
+
+type uploadSnapshot struct {
+	path   string
+	digest string
+	size   int64
+}
+
+func snapshotFile(ctx context.Context, sourcePath string) (uploadSnapshot, error) {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return uploadSnapshot{}, errors.Wrapf(err, "open %s", sourcePath)
+	}
+	defer func() { _ = source.Close() }()
+
+	info, err := source.Stat()
+	if err != nil {
+		return uploadSnapshot{}, errors.Wrapf(err, "stat %s", sourcePath)
+	}
+	if !info.Mode().IsRegular() {
+		return uploadSnapshot{}, errors.Errorf("snapshot %s: not a regular file", sourcePath)
+	}
+
+	temporary, err := os.CreateTemp("", "hyperslop-upload-*")
+	if err != nil {
+		return uploadSnapshot{}, errors.Wrap(err, "create upload snapshot")
+	}
+	temporaryPath := temporary.Name()
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+
+	hasher := sha256.New()
+	size, copyErr := io.Copy(io.MultiWriter(temporary, hasher), &contextReader{ctx: ctx, reader: source})
+	if copyErr != nil {
+		_ = temporary.Close()
+		return uploadSnapshot{}, errors.Wrapf(copyErr, "snapshot %s", sourcePath)
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return uploadSnapshot{}, errors.Wrap(err, "sync upload snapshot")
+	}
+	if err := temporary.Close(); err != nil {
+		return uploadSnapshot{}, errors.Wrap(err, "close upload snapshot")
+	}
+	keep = true
+	return uploadSnapshot{
+		path: temporaryPath, digest: "sha256:" + hex.EncodeToString(hasher.Sum(nil)), size: size,
+	}, nil
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *contextReader) Read(buffer []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(buffer)
 }
 
 // HashFile computes a local file's content address and size.
@@ -370,6 +447,9 @@ type GCResult struct {
 
 // GarbageCollect asks the server to delete unreferenced stored bytes.
 func (c *Client) GarbageCollect(ctx context.Context, minAgeSeconds int) (GCResult, error) {
+	if minAgeSeconds < 0 {
+		return GCResult{}, errors.Errorf("client: min age seconds must not be negative, got %d", minAgeSeconds)
+	}
 	query := url.Values{}
 	if minAgeSeconds > 0 {
 		query.Set("min_age_seconds", strconv.Itoa(minAgeSeconds))

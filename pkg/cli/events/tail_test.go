@@ -12,29 +12,45 @@ import (
 	"testing/iotest"
 	"time"
 
+	"github.com/go-go-golems/glazed/pkg/settings"
+
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
 )
 
 func TestTailFollowRejectsRangeFiltersItCannotPreserve(t *testing.T) {
-	for name, settings := range map[string]rangeSettings{
+	for name, rangeSetting := range map[string]rangeSettings{
 		"after":  {After: 7},
 		"before": {Before: 10},
 		"from":   {From: "2026-07-29T00:00:00Z"},
 		"to":     {To: "2026-07-30T00:00:00Z"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			s := &tailSettings{Follow: true, rangeSettings: settings}
-			if err := s.validateFollowRange(); err == nil {
+			s := &tailSettings{Follow: true, rangeSettings: rangeSetting}
+			if err := s.validateFollow(settings.OutputJSONL); err == nil {
 				t.Fatalf("validateFollowRange accepted --follow with %s", name)
 			}
 		})
 	}
-	if err := (&tailSettings{Follow: true}).validateFollowRange(); err != nil {
+	if err := (&tailSettings{Follow: true}).validateFollow(settings.OutputJSONL); err != nil {
 		t.Fatalf("bare --follow rejected: %v", err)
 	}
-	if err := (&tailSettings{Follow: false, rangeSettings: rangeSettings{Before: 10}}).validateFollowRange(); err != nil {
+	if err := (&tailSettings{Follow: false, rangeSettings: rangeSettings{Before: 10}}).validateFollow(settings.OutputTable); err != nil {
 		t.Fatalf("bounded non-follow tail rejected: %v", err)
+	}
+}
+
+func TestTailFollowRequiresStreamingFormat(t *testing.T) {
+	for _, format := range []settings.OutputFormat{
+		settings.OutputTable, settings.OutputJSON, settings.OutputCSV,
+		settings.OutputTSV, settings.OutputYAML,
+	} {
+		if err := (&tailSettings{Follow: true}).validateFollow(format); err == nil {
+			t.Errorf("--follow accepted non-streaming format %s", format)
+		}
+	}
+	if err := (&tailSettings{Follow: true}).validateFollow(settings.OutputJSONL); err != nil {
+		t.Fatalf("--follow rejected JSONL: %v", err)
 	}
 }
 

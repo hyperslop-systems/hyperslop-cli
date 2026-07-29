@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/tabular"
 )
 
@@ -276,8 +277,8 @@ func decodeJSON(raw json.RawMessage) any {
 	if len(raw) == 0 {
 		return nil
 	}
-	var decoded any
-	if err := json.Unmarshal(raw, &decoded); err != nil {
+	decoded, err := jsondoc.Value(raw)
+	if err != nil {
 		// Unparseable JSON from our own server is not worth an error path in a
 		// projection; showing the bytes is more useful than showing nothing.
 		return string(raw)

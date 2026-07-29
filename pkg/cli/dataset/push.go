@@ -19,6 +19,7 @@ import (
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 )
 
 // FlattenFlag stores files under their base name instead of their local path.
@@ -207,7 +208,7 @@ func buildCommitRequest(s *pushSettings) (datadrop.CommitVersionRequest, error) 
 		if err != nil {
 			return datadrop.CommitVersionRequest{}, err
 		}
-		if err := json.Unmarshal(raw, &manifest); err != nil {
+		if err := jsondoc.Decode(raw, &manifest); err != nil {
 			return datadrop.CommitVersionRequest{}, errors.Wrapf(err, "manifest %s", s.Manifest)
 		}
 		// JSON null is a valid absent manifest (matching ParseManifest). It

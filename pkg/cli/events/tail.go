@@ -101,7 +101,11 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 	if err := vals.DecodeSectionInto(schema.DefaultSlug, s); err != nil {
 		return err
 	}
-	if err := s.validateFollowRange(); err != nil {
+	output := &settings.StructuredOutputSettings{}
+	if err := vals.DecodeSectionInto(settings.StructuredOutputSlug, output); err != nil {
+		return err
+	}
+	if err := s.validateFollow(output.Format); err != nil {
 		return err
 	}
 
@@ -136,13 +140,15 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 	return followStream(ctx, gp, api, s.Drop, s.Stream, cursor)
 }
 
-// validateFollowRange rejects filters the SSE endpoint cannot preserve. The
-// live API resumes by sequence cursor only; applying time/before bounds to the
-// initial page and then dropping them would either replay explicitly excluded
-// history or emit later events outside the requested range.
-func (s *tailSettings) validateFollowRange() error {
+// validateFollow enforces every invariant of the unbounded execution mode in
+// one place: the SSE endpoint can preserve only a sequence cursor, and only
+// JSONL has streaming formatter semantics in Glazed v1.4.
+func (s *tailSettings) validateFollow(format settings.OutputFormat) error {
 	if !s.Follow {
 		return nil
+	}
+	if format != settings.OutputJSONL {
+		return errors.Errorf("--follow requires --format jsonl, got %s", format)
 	}
 	var incompatible []string
 	if s.After > 0 {

@@ -20,6 +20,7 @@ import (
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 )
 
 // PushCommand appends events to a drop.
@@ -121,11 +122,8 @@ func (c *PushCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	if s.Stdin && len(s.Pairs) > 0 {
-		return errors.New("--stdin cannot be combined with key=value arguments")
-	}
-	if s.NDJSON && !s.Stdin {
-		return errors.New("--ndjson requires --stdin")
+	if err := s.validate(); err != nil {
+		return err
 	}
 
 	api, err := ddcli.ClientFrom(vals)
@@ -140,10 +138,6 @@ func (c *PushCommand) RunIntoGlazeProcessor(
 	if s.Stdin {
 		return pushFromStdin(ctx, gp, api, s, overrides)
 	}
-	if len(s.Pairs) == 0 {
-		return errors.New("provide key=value arguments or --stdin")
-	}
-
 	payload, err := payloadFromFields(s.Pairs, s.Strings)
 	if err != nil {
 		return err
@@ -152,6 +146,20 @@ func (c *PushCommand) RunIntoGlazeProcessor(
 }
 
 // envelopeOverrides are the CloudEvents attributes a pusher can set.
+func (s *pushSettings) validate() error {
+	hasFields := len(s.Pairs) > 0 || len(s.Strings) > 0
+	if s.Stdin && hasFields {
+		return errors.New("--stdin cannot be combined with key=value arguments or --string")
+	}
+	if s.NDJSON && !s.Stdin {
+		return errors.New("--ndjson requires --stdin")
+	}
+	if !s.Stdin && !hasFields {
+		return errors.New("provide key=value arguments, --string, or --stdin")
+	}
+	return nil
+}
+
 type envelopeOverrides struct {
 	source    string
 	eventType string
@@ -282,8 +290,8 @@ func payloadFromFields(pairs, stringPairs []string) (json.RawMessage, error) {
 			return nil, err
 		}
 
-		var parsed any
-		if json.Valid([]byte(value)) && json.Unmarshal([]byte(value), &parsed) == nil {
+		parsed, err := jsondoc.Value([]byte(value))
+		if err == nil {
 			payload[key] = parsed
 		} else {
 			payload[key] = value

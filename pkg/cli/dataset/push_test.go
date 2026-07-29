@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,6 +43,23 @@ func TestBuildCommitRequestRejectsExplicitEmptySchema(t *testing.T) {
 	}
 	if _, err := buildCommitRequest(&pushSettings{Schema: schemaPath}); err == nil {
 		t.Fatal("buildCommitRequest silently omitted an explicitly empty schema")
+	}
+}
+
+func TestBuildCommitRequestPreservesExactManifestNumbers(t *testing.T) {
+	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+	raw := `{"sample_id":9007199254740993,"resolution":0.123456789012345678901}`
+	if err := os.WriteFile(manifestPath, []byte(raw), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	req, err := buildCommitRequest(&pushSettings{Manifest: manifestPath, Title: "Readings"})
+	if err != nil {
+		t.Fatalf("buildCommitRequest: %v", err)
+	}
+	for _, exact := range []string{"9007199254740993", "0.123456789012345678901"} {
+		if !strings.Contains(string(req.Manifest), exact) {
+			t.Errorf("manifest %s lost exact number %s", req.Manifest, exact)
+		}
 	}
 }
 

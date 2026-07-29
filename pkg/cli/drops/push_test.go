@@ -2,12 +2,40 @@ package drops
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
 // payloadFromFields is where a user's shell input becomes typed JSON, and the
 // rule is a heuristic: parse the value as JSON when it is valid JSON, treat it
 // as a string otherwise. These cases pin down what that means in practice.
+func TestPushSettingsValidateTreatsStringPairsAsPayload(t *testing.T) {
+	for name, settings := range map[string]pushSettings{
+		"string only":          {Strings: []string{"station_id=001"}},
+		"stdin only":           {Stdin: true},
+		"stdin ndjson":         {Stdin: true, NDJSON: true},
+		"positional pair only": {Pairs: []string{"x=1"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := settings.validate(); err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+		})
+	}
+	for name, settings := range map[string]pushSettings{
+		"missing payload":       {},
+		"stdin plus string":     {Stdin: true, Strings: []string{"x=y"}},
+		"stdin plus positional": {Stdin: true, Pairs: []string{"x=1"}},
+		"ndjson without stdin":  {NDJSON: true, Strings: []string{"x=y"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := settings.validate(); err == nil {
+				t.Fatal("validate accepted incompatible settings")
+			}
+		})
+	}
+}
+
 func TestPayloadFromFieldsTypesValues(t *testing.T) {
 	cases := map[string]struct {
 		fields []string
@@ -72,6 +100,20 @@ func TestPayloadFromFieldsTypesValues(t *testing.T) {
 }
 
 // --string is the escape hatch for when the heuristic guesses wrong.
+func TestPayloadFromFieldsPreservesExactNumbers(t *testing.T) {
+	encoded, err := payloadFromFields([]string{
+		"id=9007199254740993", "reading=0.123456789012345678901",
+	}, nil)
+	if err != nil {
+		t.Fatalf("payloadFromFields: %v", err)
+	}
+	for _, exact := range []string{"9007199254740993", "0.123456789012345678901"} {
+		if !strings.Contains(string(encoded), exact) {
+			t.Errorf("payload %s lost exact number %s", encoded, exact)
+		}
+	}
+}
+
 func TestPayloadFromFieldsStringOverride(t *testing.T) {
 	encoded, err := payloadFromFields(nil, []string{"temperature=21.7", "flag=true"})
 	if err != nil {
