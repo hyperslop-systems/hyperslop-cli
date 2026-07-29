@@ -31,7 +31,7 @@ RelatedFiles:
       Note: collision-free flattened JSON paths
 ExternalSources:
     - https://github.com/hyperslop-systems/hyperslop-cli/pull/1
-Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 30 findings across three review passes were fixed with regression tests in commits 1871472, a6c755a, 2114ac6, and 7647177.'
+Summary: 'Takeover assessment of PR #1: architecture is sound and well tested, but adversarial edge cases and release scaffolding needed remediation. All 30 findings across three review passes were fixed with regression tests in commits 1871472, a6c755a, 2114ac6, 0e60966, and 7647177.'
 LastUpdated: 2026-07-29T13:47:34.300270934-04:00
 WhatFor: 'Review the inherited implementation, understand why each PR finding mattered, and verify the remediation before merging PR #1.'
 WhenToUse: 'Use when reviewing PR #1, preparing the merge, or continuing HYPERSLOP-1 release work.'
@@ -158,7 +158,7 @@ The review followed behavior boundaries rather than reading the diff alphabetica
 | 26 | P2 | Row readers decoded malformed/huge records after `MaxRows` | CSV uses an inspectable physical-line source; NDJSON inspects only buffered/non-whitespace data; JSON arrays stop after `More`. All formats return a one-row truncated sample despite malformed record two. |
 | 27 | P2 | Dataset push accepted FIFO/device/socket inputs | Require `os.Stat(...).Mode().IsRegular()` before opening a draft; character-device rejection and regular-file symlink acceptance tested. |
 | 28 | P1 | Global cancellation-as-success hid interrupted finite work | `ExitOn` now treats cancellation as exit 1; only follow converts its intentional stop to nil. Cancellation and follow tests pass. |
-| 29 | P2 | Archive mode ignored default verification | Resolve/pin the manifest, parse tar while copying canonical bytes, verify membership/type/size/digest for every file, and publish only on success. Valid/mismatch atomic tests added. |
+| 29 | P2 | Archive mode ignored default verification | Resolve/pin the manifest, parse tar while copying canonical bytes, verify membership/type/size/digest for every file, and publish only on success. Metadata is capped and file reads are bounded by manifest/header size (`0e60966`, GoSec G110). Valid/mismatch atomic tests added. |
 | 30 | P2 | Companion build/seeder failures became integration skips | Resolve module availability separately; absent standalone companion skips, but present-workspace build/seed failures are fatal. Both modes tested. |
 
 ## Additional takeover fixes
@@ -206,6 +206,7 @@ Fresh after remediation:
 - First-pass fix: `1871472`
 - Second-pass fix: `a6c755a`
 - Third-pass fix: `2114ac6`
+- Third-pass GoSec follow-up: `0e60966`
 - Companion admin/server fix: `7647177`
 - Design: `../design-doc/01-extracting-the-customer-facing-cli-into-hyperslop-cli-analysis-design-and-intern-implementation-guide.md`
 - Implementation diary: `../reference/02-implementation-diary.md`

@@ -100,3 +100,12 @@ Third PR #1 review on head 8653727 found seven additional valid findings (3 P1, 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/client/client.go — typed reconnectable SSE read errors
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/tabular/rows.go — format-aware bounded sampling
 
+
+## 2026-07-29
+
+Third-pass CI follow-up 0e60966: GoSec G110 flagged unbounded tar.Reader copies in archive verification. Capped metadata entries at 16 MiB, required archive header sizes to equal the resolved manifest, and switched to io.CopyN. Exact local GoSec workflow now reports 0 issues.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/pkg/cli/dataset/get.go — bounded archive entry verification
+

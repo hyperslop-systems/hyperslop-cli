@@ -718,6 +718,8 @@ integration tests must distinguish unavailable dependencies from broken ones.
 
 **Commit (code):** `2114ac6` — "fix(HYPERSLOP-1): address third-pass PR review findings"
 
+**Commit (CI follow-up):** `0e60966` — "fix(dataset): bound archive verification reads"
+
 ### What I did
 
 - Added typed `client.StreamReadError`; follow reconnects on read/transport failure
@@ -766,6 +768,16 @@ integration tests must distinguish unavailable dependencies from broken ones.
   `pkg/cli/exit.go:172:39: undefined: context`
 
   Restored the import and reran the targeted tests successfully.
+- GitHub GoSec then found G110 at the two unbounded `io.Copy` calls reading tar
+  entries. Exact result:
+
+  `pkg/cli/dataset/get.go:494 - G110: Potential DoS vulnerability via decompression bomb`
+
+  `pkg/cli/dataset/get.go:473 - G110: Potential DoS vulnerability via decompression bomb`
+
+  The archive is uncompressed, but bounded reads are still the stronger design.
+  Capped metadata at 16 MiB, required file header sizes to match the manifest,
+  switched to `io.CopyN`, and reran the exact GoSec command: 0 issues.
 
 ### What I learned
 
