@@ -41,21 +41,21 @@ func NewWhoamiCommand() (cmds.Command, error) {
 	return &WhoamiCommand{cmds.NewCommandDescription(
 		"whoami",
 		cmds.WithShort("Show who the current credential authenticates as"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(RenderAppText(strings.TrimSpace(`
 Report the identity, kind and scopes of the configured credential.
 
 Answers the four questions a 403 cannot distinguish between: is the token
 valid, whose is it, what may it do, and is this server even running with user
 accounts.
 
-    datadrop whoami
-    datadrop whoami --format json
-    datadrop whoami --format jsonl --output-fields user_id
+    {{app}} whoami
+    {{app}} whoami --format json
+    {{app}} whoami --format jsonl --output-fields user_id
 
 An unauthenticated answer is a row like any other, with authenticated=false —
 not an error. "This server accepted no credential" is information; a script
 that wants it to be fatal can request JSONL and test the field with jq -e.
-`)),
+`))),
 		cmds.WithSections(glazedSection, clientSection),
 	)}, nil
 }

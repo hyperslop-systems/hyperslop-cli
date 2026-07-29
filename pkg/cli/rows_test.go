@@ -205,10 +205,15 @@ func TestRowForDatasetVersionKeys(t *testing.T) {
 }
 
 func TestRowForDeletedVersionKeys(t *testing.T) {
-	row := RowForDeletedVersion("greenhouse", "readings", "1")
+	row := RowForDeletedVersion(datadrop.DeleteDatasetVersionResult{
+		Drop: "greenhouse", Dataset: "readings", Version: 3, Deleted: true,
+	})
 	assertKeys(t, "RowForDeletedVersion", row, []string{
 		"drop", "dataset", "version", "deleted",
 	})
+	if version, _ := row.Get("version"); version != 3 {
+		t.Fatalf("version = %v, want concrete version 3", version)
+	}
 }
 
 func TestRowForImportResultKeys(t *testing.T) {
@@ -217,6 +222,16 @@ func TestRowForImportResultKeys(t *testing.T) {
 		"drop", "dataset", "version", "path", "stream",
 		"rows", "appended", "skipped", "truncated", "warnings",
 	})
+}
+
+func TestRowForImportResultUsesTotalWarningCount(t *testing.T) {
+	row := RowForImportResult(datadrop.ImportResult{
+		WarningCount: 17,
+		Warnings:     []datadrop.Violation{{Path: "/sample", Message: "one sampled warning"}},
+	})
+	if got, _ := row.Get("warnings"); got != 17 {
+		t.Fatalf("warnings = %v, want total warning_count 17", got)
+	}
 }
 
 func TestRowForGCResultKeys(t *testing.T) {

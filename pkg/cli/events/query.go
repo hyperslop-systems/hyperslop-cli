@@ -36,24 +36,24 @@ func NewQueryCommand() (cmds.Command, error) {
 	return &QueryCommand{cmds.NewCommandDescription(
 		"query",
 		cmds.WithShort("Query events from a drop"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Query events from a drop by count, sequence cursor, or time range.
 
-    datadrop query greenhouse --limit 25
-    datadrop query greenhouse --from 2026-07-01T00:00:00Z --to 2026-07-02T00:00:00Z
-    datadrop query greenhouse --after 18440 --order asc
+    {{app}} query greenhouse --limit 25
+    {{app}} query greenhouse --from 2026-07-01T00:00:00Z --to 2026-07-02T00:00:00Z
+    {{app}} query greenhouse --after 18440 --order asc
 
 Each event is one row. The envelope fields come first and the payload follows,
 flattened into data.* columns — the same column names the web workbench shows,
 because both come from the same projection:
 
-    datadrop query greenhouse --limit 3 --output-fields seq,time,data.temp_c
-    datadrop query greenhouse --format csv --output-fields seq,data.temp_c
-    datadrop query greenhouse --format jsonl
+    {{app}} query greenhouse --limit 3 --output-fields seq,time,data.temp_c
+    {{app}} query greenhouse --format csv --output-fields seq,data.temp_c
+    {{app}} query greenhouse --format jsonl
 
 For the original nested envelope rather than a flattened row, use
-'datadrop export --format ndjson'.
-`)),
+'{{app}} export --format ndjson'.
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

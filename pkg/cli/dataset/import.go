@@ -39,7 +39,7 @@ func NewImportCommand() (cmds.Command, error) {
 	return &ImportCommand{cmds.NewCommandDescription(
 		"import",
 		cmds.WithShort("Materialize a dataset file's rows into an event stream"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Materialize a dataset file's rows into an event stream.
 
 Each row becomes one event carrying provenance back to the dataset version, the
@@ -49,8 +49,8 @@ Event identifiers are derived from (digest, row), so re-running an interrupted
 import resumes rather than duplicating: rows already imported are reported as
 skipped.
 
-    datadrop dataset import greenhouse readings-2026 --path data/readings.csv
-`)),
+    {{app}} dataset import greenhouse readings-2026 --path data/readings.csv
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

@@ -2,7 +2,7 @@
 
 all: gifs
 
-VERSION=v0.1.14
+VERSION=v0.1.0
 GORELEASER_ARGS ?= --skip=sign --snapshot --clean
 GORELEASER_TARGET ?= --single-target
 
@@ -93,7 +93,5 @@ bump-go-go-golems:
 	fi
 	GOWORK=off go mod tidy
 
-HYPERSLOP_BINARY=$(shell which hyperslop)
 install:
-	GOWORK=off go build -o ./dist/hyperslop ./cmd/hyperslop && \
-		cp ./dist/hyperslop $(HYPERSLOP_BINARY)
+	GOWORK=off go install ./cmd/hyperslop

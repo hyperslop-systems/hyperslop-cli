@@ -38,19 +38,19 @@ func NewCreateCommand() (cmds.Command, error) {
 	return &CreateCommand{cmds.NewCommandDescription(
 		"create",
 		cmds.WithShort("Create a drop"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Create a named drop.
 
 A drop is the unit of naming, sharing and export. It always has a default
 stream called "events".
 
-    datadrop create greenhouse
-    datadrop create greenhouse --retention 90d --public-read
-    datadrop create greenhouse --format jsonl --output-fields name
+    {{app}} create greenhouse
+    {{app}} create greenhouse --retention 90d --public-read
+    {{app}} create greenhouse --format jsonl --output-fields name
 
 The created drop is emitted as one row, so a script can pipe it onward instead
 of parsing a sentence.
-`)),
+`))),
 		cmds.WithArguments(
 			fields.New("name", fields.TypeString,
 				fields.WithIsArgument(true),

@@ -37,7 +37,7 @@ func NewPutCommand() (cmds.Command, error) {
 	return &PutCommand{cmds.NewCommandDescription(
 		"put",
 		cmds.WithShort("Register a new schema version for a stream"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Register a new JSON Schema version for a stream.
 
 Each put creates a new immutable version; the highest version is the active
@@ -45,9 +45,9 @@ one. Mode "strict" rejects invalid payloads with 422, which the CLI reports as
 exit code 5; mode "permissive" accepts them and attaches warnings to the stored
 event.
 
-    datadrop schema put greenhouse --file reading.schema.json --mode strict
-    cat reading.schema.json | datadrop schema put greenhouse --file -
-`)),
+    {{app}} schema put greenhouse --file reading.schema.json --mode strict
+    cat reading.schema.json | {{app}} schema put greenhouse --file -
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

@@ -206,6 +206,62 @@ func TestPushSetsModeExplicitly(t *testing.T) {
 	}
 }
 
+func TestPushDerivesDuplicateFromHTTPStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		status    int
+		duplicate bool
+	}{
+		{"new append", http.StatusCreated, false},
+		{"idempotent replay", http.StatusOK, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				writeJSON(w, datadrop.AppendResult{ID: "event-1", Seq: 7})
+			}))
+			defer server.Close()
+
+			c, err := New(server.URL, "token")
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+			result, err := c.Push(context.Background(), "greenhouse", "events",
+				json.RawMessage(`{"temperature":21.7}`), false)
+			if err != nil {
+				t.Fatalf("Push: %v", err)
+			}
+			if result.Duplicate != tc.duplicate {
+				t.Fatalf("Duplicate = %v, want %v for status %d", result.Duplicate, tc.duplicate, tc.status)
+			}
+		})
+	}
+}
+
+func TestDeleteDatasetVersionReturnsConcreteVersionForLatest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/versions/latest") {
+			t.Errorf("delete path = %q, want latest alias", r.URL.Path)
+		}
+		writeJSON(w, datadrop.DeleteDatasetVersionResult{
+			Drop: "greenhouse", Dataset: "readings", Version: 7, Deleted: true,
+		})
+	}))
+	defer server.Close()
+
+	c, err := New(server.URL, "token")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	deleted, err := c.DeleteDatasetVersion(context.Background(), "greenhouse", "readings", datadrop.LatestVersion)
+	if err != nil {
+		t.Fatalf("DeleteDatasetVersion: %v", err)
+	}
+	if deleted.Version != 7 || !deleted.Deleted {
+		t.Fatalf("deleted = %+v, want concrete version 7", deleted)
+	}
+}
+
 // The default stream is omitted from the query string, so request URLs stay
 // readable for the common case.
 func TestQueryValuesOmitsDefaults(t *testing.T) {

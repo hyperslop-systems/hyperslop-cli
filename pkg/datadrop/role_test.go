@@ -17,6 +17,9 @@ func TestRoleOrdering(t *testing.T) {
 		// itself. Without the rank > 0 guard, AtLeast(RoleNone) would be true
 		// for a stranger and every read would open.
 		{RoleNone, RoleNone, false},
+		{RoleAdmin, Role("owner"), false},
+		{Role("owner"), RoleReader, false},
+		{Role("owner"), Role("owner"), false},
 	}
 	for _, c := range cases {
 		if got := c.have.AtLeast(c.required); got != c.want {

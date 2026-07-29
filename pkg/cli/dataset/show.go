@@ -40,13 +40,13 @@ func NewShowCommand() (cmds.Command, error) {
 	return &ShowCommand{cmds.NewCommandDescription(
 		"show",
 		cmds.WithShort("Show a dataset or one of its versions"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Show a dataset's versions, or one named version.
 
-    datadrop dataset show greenhouse readings-2026
-    datadrop dataset show greenhouse readings-2026 --version latest
-    datadrop dataset show greenhouse readings-2026 --output-fields version,file_count,total_bytes
-`)),
+    {{app}} dataset show greenhouse readings-2026
+    {{app}} dataset show greenhouse readings-2026 --version latest
+    {{app}} dataset show greenhouse readings-2026 --output-fields version,file_count,total_bytes
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

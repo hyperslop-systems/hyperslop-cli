@@ -68,12 +68,15 @@ func (c *Client) CommitDatasetVersion(
 	return committed, err
 }
 
-// DeleteDatasetVersion removes a version.
+// DeleteDatasetVersion removes a version and returns the concrete version the
+// server deleted. This matters when version is the "latest" alias.
 func (c *Client) DeleteDatasetVersion(
 	ctx context.Context, drop, dataset, version string,
-) error {
-	return c.doJSON(ctx, http.MethodDelete,
-		c.versionPath(drop, dataset, version), nil, nil, nil)
+) (datadrop.DeleteDatasetVersionResult, error) {
+	var deleted datadrop.DeleteDatasetVersionResult
+	err := c.doJSON(ctx, http.MethodDelete,
+		c.versionPath(drop, dataset, version), nil, nil, &deleted)
+	return deleted, err
 }
 
 // BlobExists asks whether the server already holds these bytes.

@@ -1,6 +1,7 @@
 package datadrop
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -213,7 +214,7 @@ func retentionDuration(retention string) (time.Duration, error) {
 	if err := ValidateRetention(retention); err != nil {
 		return 0, err
 	}
-	count, err := strconv.Atoi(retention[:len(retention)-1])
+	count, err := strconv.ParseInt(retention[:len(retention)-1], 10, 64)
 	if err != nil {
 		return 0, errors.Wrapf(err, "invalid duration %q", retention)
 	}
@@ -227,6 +228,9 @@ func retentionDuration(retention string) (time.Duration, error) {
 	}[retention[len(retention)-1]]
 	if unit == 0 {
 		return 0, errors.Errorf("invalid duration unit in %q", retention)
+	}
+	if count > math.MaxInt64/int64(unit) {
+		return 0, errors.Errorf("duration %q exceeds the maximum representable interval", retention)
 	}
 	return time.Duration(count) * unit, nil
 }

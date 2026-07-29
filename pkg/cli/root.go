@@ -124,7 +124,7 @@ func Execute(registrars ...Registrar) int {
 		// unknown subcommand — which is why the prefix is the same one ExitOn
 		// uses.
 		_, _ = os.Stderr.WriteString(ErrorPrefix() + err.Error() + "\n")
-		return ExitCodeFor(err)
+		return ExitUsage
 	}
 	return ExitOK
 }

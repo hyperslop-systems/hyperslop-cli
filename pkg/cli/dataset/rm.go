@@ -36,15 +36,15 @@ func NewRmCommand() (cmds.Command, error) {
 	return &RmCommand{cmds.NewCommandDescription(
 		"rm",
 		cmds.WithShort("Delete a dataset version"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Delete a dataset version.
 
 The version's file records are removed. The bytes themselves are left in place,
 because other versions may share them; unreferenced bytes are reclaimed by
-'datadrop dataset gc'.
+'{{app}} dataset gc'.
 
-    datadrop dataset rm greenhouse readings-2026 --version 1
-`)),
+    {{app}} dataset rm greenhouse readings-2026 --version 1
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),
@@ -85,8 +85,9 @@ func (c *RmCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	if err := api.DeleteDatasetVersion(ctx, s.Drop, s.Dataset, s.Version); err != nil {
+	deleted, err := api.DeleteDatasetVersion(ctx, s.Drop, s.Dataset, s.Version)
+	if err != nil {
 		return err
 	}
-	return gp.AddRow(ctx, ddcli.RowForDeletedVersion(s.Drop, s.Dataset, s.Version))
+	return gp.AddRow(ctx, ddcli.RowForDeletedVersion(deleted))
 }

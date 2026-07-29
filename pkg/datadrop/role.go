@@ -46,8 +46,13 @@ func (r Role) rank() int {
 	}
 }
 
-// AtLeast reports whether r is required or stronger.
-func (r Role) AtLeast(required Role) bool { return r.rank() >= required.rank() && r.rank() > 0 }
+// AtLeast reports whether r is required or stronger. Both roles must be known:
+// treating an unknown required role as rank zero would let every valid role
+// satisfy a requirement introduced by a newer server, which is fail-open.
+func (r Role) AtLeast(required Role) bool {
+	have, need := r.rank(), required.rank()
+	return have > 0 && need > 0 && have >= need
+}
 
 // Valid reports whether r may be stored in drop_members.
 func (r Role) Valid() bool {

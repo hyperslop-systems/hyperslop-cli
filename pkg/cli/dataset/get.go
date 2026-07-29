@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -46,20 +48,20 @@ func NewGetCommand() (cmds.Command, error) {
 	return &GetCommand{cmds.NewCommandDescription(
 		"get",
 		cmds.WithShort("Download a dataset version"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Download a dataset version.
 
 Each downloaded file's digest is recomputed and compared against the version's
 file list, so corruption in transit is caught at the point of use rather than
 trusted away.
 
-    datadrop dataset get greenhouse readings-2026 --output ./downloaded/
-    datadrop dataset get greenhouse readings-2026 --file data/readings.csv -o -
-    datadrop dataset get greenhouse readings-2026 --archive -o version.tar
+    {{app}} dataset get greenhouse readings-2026 --output ./downloaded/
+    {{app}} dataset get greenhouse readings-2026 --file data/readings.csv -o -
+    {{app}} dataset get greenhouse readings-2026 --archive -o version.tar
 
 This verb writes files, so it has no --output format flag: --output here is a
 destination, the same one it has always been.
-`)),
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),
@@ -120,21 +122,50 @@ func (c *GetCommand) Run(ctx context.Context, vals *values.Values) error {
 	}
 
 	if s.Archive {
-		return streamToDestination(s.Output, s.Force, func() (io.ReadCloser, error) {
+		return streamToDestination(s.Output, s.Force, "", false, func() (io.ReadCloser, error) {
 			return api.DownloadDatasetArchive(ctx, s.Drop, s.Dataset, s.Version)
 		})
 	}
 
 	if s.File != "" {
-		return streamToDestination(s.Output, s.Force, func() (io.ReadCloser, error) {
-			return api.DownloadDatasetFile(ctx, s.Drop, s.Dataset, s.Version, s.File)
-		})
+		return downloadSingleFile(ctx, api, s)
 	}
 
 	if s.Output == "" || s.Output == "-" {
 		return errors.New("--output DIRECTORY is required when downloading a whole version")
 	}
 	return downloadVersion(ctx, api, s)
+}
+
+// downloadSingleFile downloads one file. Unless --no-verify was requested, it
+// first resolves the version manifest and uses the concrete version number for
+// the byte request. Resolving "latest" before downloading avoids verifying
+// bytes from a newer version against an older manifest if a publisher commits
+// while the command is running.
+func downloadSingleFile(ctx context.Context, api *client.Client, s *getSettings) error {
+	version := s.Version
+	expectedDigest := ""
+	if !s.NoVerify {
+		found, err := api.GetDatasetVersion(ctx, s.Drop, s.Dataset, s.Version)
+		if err != nil {
+			return err
+		}
+		version = strconv.Itoa(found.Version)
+		for _, file := range found.Files {
+			if file.Path == s.File {
+				expectedDigest = file.Digest
+				break
+			}
+		}
+		if expectedDigest == "" {
+			return errors.Errorf("dataset version %d does not contain file %q", found.Version, s.File)
+		}
+	}
+
+	return streamToDestination(s.Output, s.Force, expectedDigest, !s.NoVerify,
+		func() (io.ReadCloser, error) {
+			return api.DownloadDatasetFile(ctx, s.Drop, s.Dataset, version, s.File)
+		})
 }
 
 // downloadVersion writes every file of a version beneath a directory, at its
@@ -283,31 +314,57 @@ func downloadTempName(parent string) (string, error) {
 	return path.Join(parent, ".datadrop-"+hex.EncodeToString(suffix[:])+".tmp"), nil
 }
 
-// streamToDestination writes a single stream to stdout or a file.
+// streamToDestination writes a single response to stdout or publishes it to a
+// file transactionally. A file destination is never truncated in place: bytes
+// go to a temporary sibling, are optionally verified, fsynced, and only then
+// atomically replace the destination. Thus --force preserves a known-good file
+// across HTTP, transfer, and integrity failures.
 func streamToDestination(
 	output string,
 	force bool,
+	expectedDigest string,
+	verify bool,
 	open func() (io.ReadCloser, error),
 ) error {
-	var (
-		sink io.Writer = os.Stdout
-		file *os.File
-	)
-	if output != "" && output != "-" {
-		flags := os.O_CREATE | os.O_EXCL | os.O_WRONLY
-		if force {
-			flags = os.O_CREATE | os.O_TRUNC | os.O_WRONLY
-		}
-		var err error
-		file, err = os.OpenFile(output, flags, 0o600)
+	if verify && expectedDigest == "" {
+		return errors.New("cannot verify download without an expected digest")
+	}
+
+	if output == "" || output == "-" {
+		body, err := open()
 		if err != nil {
-			if os.IsExist(err) && !force {
-				return errors.Errorf("destination %q already exists (use --force to replace it)", output)
-			}
-			return errors.Wrapf(err, "create %s", output)
+			return err
 		}
-		defer func() { _ = file.Close() }()
-		sink = file
+		defer func() { _ = body.Close() }()
+		return copyDownloadedContent(os.Stdout, body, expectedDigest, verify)
+	}
+
+	if info, err := os.Lstat(output); err == nil {
+		if info.IsDir() {
+			return errors.Errorf("destination %q is a directory", output)
+		}
+		if !force {
+			return errors.Errorf("destination %q already exists (use --force to replace it)", output)
+		}
+	} else if !os.IsNotExist(err) {
+		return errors.Wrapf(err, "inspect destination %s", output)
+	}
+
+	parent := filepath.Dir(output)
+	temp, err := os.CreateTemp(parent, "."+filepath.Base(output)+"-*.tmp")
+	if err != nil {
+		return errors.Wrapf(err, "create temporary file for %s", output)
+	}
+	tempName := temp.Name()
+	published := false
+	defer func() {
+		_ = temp.Close()
+		if !published {
+			_ = os.Remove(tempName)
+		}
+	}()
+	if err := temp.Chmod(0o600); err != nil {
+		return errors.Wrapf(err, "restrict temporary file for %s", output)
 	}
 
 	body, err := open()
@@ -316,6 +373,63 @@ func streamToDestination(
 	}
 	defer func() { _ = body.Close() }()
 
-	_, err = io.Copy(sink, body)
-	return errors.Wrap(err, "write download")
+	if err := copyDownloadedContent(temp, body, expectedDigest, verify); err != nil {
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		return errors.Wrapf(err, "sync temporary file for %s", output)
+	}
+	if err := temp.Close(); err != nil {
+		return errors.Wrapf(err, "close temporary file for %s", output)
+	}
+
+	if force {
+		if err := os.Rename(tempName, output); err != nil {
+			return errors.Wrapf(err, "publish %s", output)
+		}
+	} else {
+		// Link is the no-clobber publication primitive: unlike a preflight-only
+		// existence check it remains safe if another process creates output
+		// while the download is in flight.
+		if err := os.Link(tempName, output); err != nil {
+			if os.IsExist(err) {
+				return errors.Errorf("destination %q already exists (use --force to replace it)", output)
+			}
+			return errors.Wrapf(err, "publish %s without overwrite", output)
+		}
+		if err := os.Remove(tempName); err != nil {
+			return errors.Wrapf(err, "remove temporary file for %s", output)
+		}
+	}
+	published = true
+	return nil
+}
+
+func copyDownloadedContent(dst io.Writer, body io.Reader, expectedDigest string, verify bool) error {
+	writer := dst
+	var hasher hashWriter
+	if verify {
+		hasher = sha256.New()
+		writer = io.MultiWriter(dst, hasher)
+	}
+	if _, err := io.Copy(writer, body); err != nil {
+		return errors.Wrap(err, "write download")
+	}
+	if verify {
+		actualDigest := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+		if actualDigest != expectedDigest {
+			return errors.Errorf(
+				"integrity check failed: content hashes to %s, manifest says %s",
+				actualDigest, expectedDigest)
+		}
+	}
+	return nil
+}
+
+// hashWriter is the subset of hash.Hash used while copying a download. Naming
+// the narrow interface keeps copyDownloadedContent independent of a concrete
+// digest implementation.
+type hashWriter interface {
+	io.Writer
+	Sum([]byte) []byte
 }

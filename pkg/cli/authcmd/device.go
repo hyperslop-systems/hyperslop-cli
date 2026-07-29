@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -100,6 +101,15 @@ func (c *DeviceCommand) Run(ctx context.Context, vals *values.Values) error {
 	timeout, err := time.ParseDuration(settings.Timeout)
 	if err != nil || timeout <= 0 {
 		return errors.Errorf("invalid --timeout %q", settings.Timeout)
+	}
+	// Validate and create the destination before starting the one-time flow.
+	// Otherwise browser approval can consume the authorization only for the
+	// command to discover afterwards that ~/.config/... does not exist or is
+	// unwritable, losing the secret forever.
+	if settings.CredentialFile != "" {
+		if err := prepareCredentialDestination(settings.CredentialFile); err != nil {
+			return err
+		}
 	}
 
 	// No token yet: the whole point of the device flow is to obtain one. The
@@ -209,22 +219,68 @@ func wait(ctx context.Context, d time.Duration) error {
 	}
 }
 
-func writeCredentialFile(path, token string) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return errors.Wrap(err, "open credential file")
+func prepareCredentialDestination(filePath string) error {
+	parent := filepath.Dir(filePath)
+	if err := os.MkdirAll(parent, 0o700); err != nil {
+		return errors.Wrap(err, "create credential directory")
 	}
-	if err := file.Chmod(0o600); err != nil {
+	if info, err := os.Lstat(filePath); err == nil && info.IsDir() {
+		return errors.Errorf("credential file %q is a directory", filePath)
+	} else if err != nil && !os.IsNotExist(err) {
+		return errors.Wrap(err, "inspect credential file")
+	}
+
+	probe, err := os.CreateTemp(parent, "."+filepath.Base(filePath)+"-*.tmp")
+	if err != nil {
+		return errors.Wrap(err, "preflight credential file")
+	}
+	probeName := probe.Name()
+	if err := probe.Chmod(0o600); err != nil {
+		_ = probe.Close()
+		_ = os.Remove(probeName)
+		return errors.Wrap(err, "restrict credential file probe")
+	}
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probeName)
+		return errors.Wrap(err, "close credential file probe")
+	}
+	if err := os.Remove(probeName); err != nil {
+		return errors.Wrap(err, "remove credential file probe")
+	}
+	return nil
+}
+
+func writeCredentialFile(filePath, token string) error {
+	parent := filepath.Dir(filePath)
+	file, err := os.CreateTemp(parent, "."+filepath.Base(filePath)+"-*.tmp")
+	if err != nil {
+		return errors.Wrap(err, "open temporary credential file")
+	}
+	tempName := file.Name()
+	published := false
+	defer func() {
 		_ = file.Close()
+		if !published {
+			_ = os.Remove(tempName)
+		}
+	}()
+
+	if err := file.Chmod(0o600); err != nil {
 		return errors.Wrap(err, "restrict credential file")
 	}
 	if _, err := io.WriteString(file, token+"\n"); err != nil {
-		_ = file.Close()
 		return errors.Wrap(err, "write credential file")
+	}
+	if err := file.Sync(); err != nil {
+		return errors.Wrap(err, "sync credential file")
 	}
 	if err := file.Close(); err != nil {
 		return errors.Wrap(err, "close credential file")
 	}
+	if err := os.Rename(tempName, filePath); err != nil {
+		return errors.Wrap(err, "publish credential file")
+	}
+	published = true
 	return nil
 }
 

@@ -39,7 +39,7 @@ builds:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 changelog:
   sort: asc
   filters:
@@ -52,8 +52,10 @@ signs:
     # setup for github actions according to https://goreleaser.com/ci/actions/
     args: [ "--batch", "-u", "{{ .Env.GPG_FINGERPRINT }}", "--output", "${signature}", "--detach-sign", "${artifact}" ]
 
-brews:
+homebrew_casks:
   - name: hyperslop
+    binaries:
+      - hyperslop
     description: "hyperslop is the agent/customer CLI for the datadrop backend"
     homepage: "https://github.com/hyperslop-systems/hyperslop-cli"
     repository:

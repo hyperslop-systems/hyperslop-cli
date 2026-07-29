@@ -46,7 +46,7 @@ func NewPushCommand() (cmds.Command, error) {
 	return &PushCommand{cmds.NewCommandDescription(
 		"push",
 		cmds.WithShort("Append an event to a drop"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Append an event to a drop.
 
 Values in key=value pairs are parsed as JSON when possible, so temperature=21.7
@@ -55,14 +55,14 @@ string interpretation.
 
 Payloads can also be piped in:
 
-    printf '{"temperature":22.8}' | datadrop push greenhouse --stdin
-    cat readings.ndjson | datadrop push greenhouse --stdin --ndjson
+    printf '{"temperature":22.8}' | {{app}} push greenhouse --stdin
+    cat readings.ndjson | {{app}} push greenhouse --stdin --ndjson
 
 Each accepted event is one row, so an NDJSON push reports every sequence it
 allocated:
 
-    cat readings.ndjson | datadrop push greenhouse --stdin --ndjson --format jsonl --output-fields seq
-`)),
+    cat readings.ndjson | {{app}} push greenhouse --stdin --ndjson --format jsonl --output-fields seq
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

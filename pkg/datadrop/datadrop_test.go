@@ -72,6 +72,20 @@ func TestValidateRetention(t *testing.T) {
 	}
 }
 
+func TestParseExpiresInRejectsDurationOverflow(t *testing.T) {
+	now := time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)
+	if _, err := ParseExpiresIn("2562048h", now); err == nil {
+		t.Fatal("ParseExpiresIn accepted a duration that overflows time.Duration")
+	}
+	deadline, err := ParseExpiresIn("2562047h", now)
+	if err != nil {
+		t.Fatalf("ParseExpiresIn rejected the largest whole-hour duration: %v", err)
+	}
+	if deadline == nil || !deadline.After(now) {
+		t.Fatalf("deadline = %v, want a future time", deadline)
+	}
+}
+
 func TestParseMode(t *testing.T) {
 	for input, want := range map[string]Mode{
 		"":           ModeStrict, // an unspecified mode defaults to the safe one

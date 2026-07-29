@@ -48,11 +48,11 @@ func NewExportCommand() (cmds.Command, error) {
 	return &ExportCommand{cmds.NewCommandDescription(
 		"export",
 		cmds.WithShort("Export a drop's events in an open format"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Export a drop's events as CSV, NDJSON, or JSON.
 
-    datadrop export greenhouse --format csv > readings.csv
-    datadrop export greenhouse --format ndjson --from 2026-07-23T00:00:00Z
+    {{app}} export greenhouse --format csv > readings.csv
+    {{app}} export greenhouse --format ndjson --from 2026-07-23T00:00:00Z
 
 --format names a SERVER-side format. The bytes are produced by the server and
 streamed through untouched, so this is the same file 'curl .../export?format=csv'
@@ -64,7 +64,7 @@ a client-side serializer choice.
 
 Use this rather than 'query --format jsonl' when you want the original nested
 envelope, or when the export is large enough that buffering it would matter.
-`)),
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

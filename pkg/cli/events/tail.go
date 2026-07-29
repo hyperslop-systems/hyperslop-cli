@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
+	"github.com/pkg/errors"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
@@ -49,24 +51,24 @@ func NewTailCommand() (cmds.Command, error) {
 	return &TailCommand{cmds.NewCommandDescription(
 		"tail",
 		cmds.WithShort("Show the most recent events, optionally following new ones"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Show the most recent events in a drop.
 
 With --follow, the command subscribes to the drop's SSE stream and prints new
 events as they are appended, resuming from the last sequence it saw if the
 connection drops. Ctrl-C ends it and exits 0.
 
-    datadrop tail greenhouse
-    datadrop tail greenhouse --follow --output-fields time,data.temp_c
+    {{app}} tail greenhouse
+    {{app}} tail greenhouse --follow --output-fields time,data.temp_c
 
 tail defaults to --format jsonl, the Glazed v1.4 streaming contract. Each event
 is flushed as one compact JSON object per line, including while --follow keeps
 the command alive. Request the default table format explicitly for a bounded
 tail when a terminal table is more useful.
 
-    datadrop tail greenhouse --format table
-    datadrop tail greenhouse --follow --format jsonl
-`)),
+    {{app}} tail greenhouse --format table
+    {{app}} tail greenhouse --follow --format jsonl
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),
@@ -98,13 +100,10 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	q, err := s.query(s.Drop)
+	q, err := s.tailQuery()
 	if err != nil {
 		return err
 	}
-	// tail fetches the newest events, then emits them oldest-first so that a
-	// follow reads chronologically from the page into the live stream.
-	q.Order = datadrop.OrderDesc
 
 	api, err := ddcli.ClientFrom(vals)
 	if err != nil {
@@ -132,6 +131,15 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 	return followStream(ctx, gp, api, s.Drop, s.Stream, cursor)
 }
 
+// tailQuery fixes the newest-first retrieval order before Normalize validates
+// cursor/order combinations. Setting it afterwards could turn a valid
+// after+ascending request into an invalid after+descending request sent to the
+// server. Tail is intrinsically newest-first; the page is reversed for output.
+func (s *tailSettings) tailQuery() (datadrop.EventQuery, error) {
+	s.Order = string(datadrop.OrderDesc)
+	return s.query(s.Drop)
+}
+
 // followStream tails the SSE feed, reconnecting from the last sequence it saw.
 //
 // Resumption needs exactly one piece of state — the cursor — which is what
@@ -141,21 +149,52 @@ func (c *TailCommand) RunIntoGlazeProcessor(
 // The context is already wired to SIGINT and SIGTERM by glazed's cobra builder,
 // so Ctrl-C cancels it here. A cancelled context is the user stopping something
 // that was working, so it returns nil rather than an error.
+const (
+	streamReconnectInitial = time.Second
+	streamReconnectMaximum = 30 * time.Second
+)
+
 func followStream(
 	ctx context.Context, gp middlewares.Processor, api *client.Client,
 	drop, stream string, cursor int64,
 ) error {
+	return followStreamWithWait(ctx, gp, api, drop, stream, cursor, waitForReconnect)
+}
+
+func followStreamWithWait(
+	ctx context.Context, gp middlewares.Processor, api *client.Client,
+	drop, stream string, cursor int64,
+	waitFor func(context.Context, time.Duration) error,
+) error {
+	reconnectDelay := streamReconnectInitial
 	for {
 		frames, errs, err := api.Stream(ctx, drop, stream, cursor)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return err
+			// HTTP responses such as 401/404 are permanent until the caller
+			// changes configuration; retrying them forever would hide a useful
+			// error. Transport failures are transient and use the same bounded
+			// reconnect policy as a clean proxy/server EOF.
+			var apiErr *client.APIError
+			if errors.As(err, &apiErr) {
+				return err
+			}
+			if err := waitFor(ctx, reconnectDelay); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+			reconnectDelay = nextReconnectDelay(reconnectDelay)
+			continue
 		}
 
-		disconnected := false
+		disconnectedByReset := false
+		sawFrame := false
 		for frame := range frames {
+			sawFrame = true
 			switch frame.Name {
 			case "reset":
 				// The server evicted us for falling behind. Resume from the
@@ -165,7 +204,7 @@ func followStream(
 				if frame.Reset.Cursor > cursor {
 					cursor = frame.Reset.Cursor
 				}
-				disconnected = true
+				disconnectedByReset = true
 
 			default:
 				if frame.Envelope.Seq <= cursor {
@@ -191,12 +230,45 @@ func followStream(
 		if ctx.Err() != nil {
 			return nil
 		}
-		if !disconnected {
-			// A clean end-of-stream means the server shut down or the
-			// connection was closed; do not spin reconnecting.
-			return nil
+		if disconnectedByReset {
+			// A reset is an explicit request to reconnect immediately.
+			reconnectDelay = streamReconnectInitial
+			continue
 		}
+
+		// A clean EOF is not a successful end for --follow. Proxies and load
+		// balancers routinely close idle SSE responses; return-to-shell here
+		// would silently miss every later event. Resume from cursor with bounded
+		// backoff to avoid a tight loop when an endpoint closes immediately.
+		if sawFrame {
+			reconnectDelay = streamReconnectInitial
+		}
+		if err := waitFor(ctx, reconnectDelay); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		reconnectDelay = nextReconnectDelay(reconnectDelay)
 	}
+}
+
+func waitForReconnect(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func nextReconnectDelay(current time.Duration) time.Duration {
+	if current >= streamReconnectMaximum/2 {
+		return streamReconnectMaximum
+	}
+	return current * 2
 }
 
 func reverse(events []datadrop.Envelope) []datadrop.Envelope {

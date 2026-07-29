@@ -35,14 +35,14 @@ func NewShowCommand() (cmds.Command, error) {
 	return &ShowCommand{cmds.NewCommandDescription(
 		"show",
 		cmds.WithShort("Show the active schema for a stream"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Show the highest — that is, the active — schema version for a stream.
 
 The spec column holds the JSON Schema document exactly as it was submitted, so
 extracting it round-trips:
 
-    datadrop schema show greenhouse --format jsonl --output-fields spec --format json
-`)),
+    {{app}} schema show greenhouse --format jsonl --output-fields spec --format json
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

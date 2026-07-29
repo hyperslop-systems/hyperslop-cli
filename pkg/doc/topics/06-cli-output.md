@@ -22,7 +22,7 @@ IsTopLevel: true
 ShowPerDefault: true
 ---
 
-Datadrop commands that return structured data emit rows. Glazed v1.4 applies one
+`hyperslop` commands that return structured data emit rows. Glazed v1.4 applies one
 small output contract to those rows:
 
 - `--format` selects serialization;
@@ -33,10 +33,10 @@ The default format is `table`. The supported formats are `table`, `json`,
 `jsonl`, `csv`, `tsv`, and `yaml`.
 
 ```bash
-datadrop query greenhouse --format json
-datadrop query greenhouse --format csv --output-fields seq,time,data.temp_c
-datadrop list --format yaml
-datadrop whoami --format jsonl --output-fields user_id
+hyperslop query greenhouse --format json
+hyperslop query greenhouse --format csv --output-fields seq,time,data.temp_c
+hyperslop list --format yaml
+hyperslop whoami --format jsonl --output-fields user_id
 ```
 
 ## Row shape
@@ -46,22 +46,32 @@ Event commands project the envelope first and then flatten payload keys under
 by the web workbench.
 
 ```text
-seq
 id
-time
-ingested_at
+drop
 stream
-schema_version
-data.<payload-key>
+seq
+time
+received_at
+source
+type
+subject
+meta                    # present when the event carries provenance metadata
+data.<payload-path>
 ```
 
-Payload columns are sorted after the envelope columns. Missing payload values
-remain absent rather than changing the field name or row shape.
+`meta` is a nested JSON object; schema provenance is available as
+`meta.schema_version` inside that object, not as a top-level `schema_version`
+column. Payload columns are sorted after the envelope columns. Missing payload
+values remain absent rather than changing the field name or row shape.
+
+Nested payload objects use `.` as a path separator. A literal `.` or `\\` in a
+JSON key is escaped with `\\`, so `{"a.b": 1, "a": {"b": 2}}` produces the two
+distinct columns `data.a\\.b` and `data.a.b` rather than losing one value.
 
 `--output-fields` projects these emitted columns in the requested order:
 
 ```bash
-datadrop query greenhouse \
+hyperslop query greenhouse \
   --output-fields seq,time,data.temp_c \
   --format jsonl
 ```
@@ -76,7 +86,7 @@ JSONL is the streaming contract. It writes one compact JSON object per line and
 does not require the command to finish before a reader can consume rows.
 
 ```bash
-datadrop tail greenhouse --follow --format jsonl |
+hyperslop tail greenhouse --follow --format jsonl |
   jq -c 'select(."data.temp_c" > 21)'
 ```
 
@@ -84,7 +94,7 @@ datadrop tail greenhouse --follow --format jsonl |
 bounded tail may request a terminal table explicitly:
 
 ```bash
-datadrop tail greenhouse --format table
+hyperslop tail greenhouse --format table
 ```
 
 There is no generic `--stream` switch. `--drop-stream` selects a Datadrop stream
@@ -96,7 +106,7 @@ inside a drop; it is a domain input, not an output formatter setting.
 reaching the serializer. Zero means unlimited.
 
 ```bash
-datadrop query greenhouse --format jsonl --max-output-rows 100
+hyperslop query greenhouse --format jsonl --max-output-rows 100
 ```
 
 This is an output guard, not source pagination. Prefer the command's own
@@ -104,13 +114,13 @@ This is an output guard, not source pagination. Prefer the command's own
 
 ## Server-formatted export
 
-`datadrop export` is not a structured row command. Its `--format` value is sent
+`hyperslop export` is not a structured row command. Its `--format` value is sent
 to the server, which streams already-formatted bytes. Use export when the
 original nested envelope or server-owned CSV/NDJSON representation is required:
 
 ```bash
-datadrop export greenhouse --format ndjson
-datadrop export greenhouse --format csv
+hyperslop export greenhouse --format ndjson
+hyperslop export greenhouse --format csv
 ```
 
 ## Troubleshooting

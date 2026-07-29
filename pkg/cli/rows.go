@@ -191,12 +191,12 @@ func RowForDatasetVersion(v datadrop.DatasetVersion) types.Row {
 // A write verb that says what it wrote is composable; one that prints a
 // sentence is not. `datadrop dataset rm ... --format jsonl --output-fields version` is the reason
 // this returns a row rather than a line of prose.
-func RowForDeletedVersion(drop, dataset, version string) types.Row {
+func RowForDeletedVersion(r datadrop.DeleteDatasetVersionResult) types.Row {
 	return types.NewRow(
-		types.MRP("drop", drop),
-		types.MRP("dataset", dataset),
-		types.MRP("version", version),
-		types.MRP("deleted", true),
+		types.MRP("drop", r.Drop),
+		types.MRP("dataset", r.Dataset),
+		types.MRP("version", r.Version),
+		types.MRP("deleted", r.Deleted),
 	)
 }
 
@@ -212,7 +212,7 @@ func RowForImportResult(r datadrop.ImportResult) types.Row {
 		types.MRP("appended", r.Appended),
 		types.MRP("skipped", r.Skipped),
 		types.MRP("truncated", r.Truncated),
-		types.MRP("warnings", len(r.Warnings)),
+		types.MRP("warnings", r.WarningCount),
 	)
 }
 

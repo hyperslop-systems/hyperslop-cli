@@ -41,15 +41,15 @@ func NewInspectCommand() (cmds.Command, error) {
 	return &InspectCommand{cmds.NewCommandDescription(
 		"inspect",
 		cmds.WithShort("Show a drop's metadata and counters"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Show one drop's metadata alongside its cheap counters: how many events it
 holds, the highest sequence allocated, when the last event arrived, and which
 streams exist.
 
-    datadrop inspect greenhouse
-    datadrop inspect greenhouse --format json
-    datadrop inspect greenhouse --format jsonl --output-fields event_count
-`)),
+    {{app}} inspect greenhouse
+    {{app}} inspect greenhouse --format json
+    {{app}} inspect greenhouse --format jsonl --output-fields event_count
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

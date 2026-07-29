@@ -92,6 +92,8 @@ func TestFormatFromPath(t *testing.T) {
 		{"data.jsonl", "", FormatNDJSON},
 		{"data.json", "", FormatJSON},
 		{"data", "text/csv", FormatCSV},
+		{"data", "text/csv; charset=utf-8", FormatCSV},
+		{"data", "Application/JSON; Charset=UTF-8", FormatJSON},
 		{"data", "application/x-ndjson", FormatNDJSON},
 		{"data", "application/json", FormatJSON},
 		{"data", "", ""},
@@ -145,6 +147,38 @@ func TestFlattenFormsAgreeOnColumnNames(t *testing.T) {
 	} {
 		if got := strs[name]; got != want {
 			t.Errorf("cell %q = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestFlattenEscapesLiteralPathSeparatorsWithoutCollisions(t *testing.T) {
+	payload := json.RawMessage(`{"a.b":1,"a":{"b":2},"a\\b":3}`)
+
+	values := map[string]any{}
+	if err := FlattenValues("", payload, values); err != nil {
+		t.Fatalf("FlattenValues: %v", err)
+	}
+	for key, want := range map[string]string{
+		`a\.b`: "1", // literal key "a.b"
+		`a.b`:  "2", // nested path a -> b
+		`a\\b`: "3", // literal backslash is escaped too
+	} {
+		got, ok := values[key].(json.Number)
+		if !ok || got.String() != want {
+			t.Errorf("column %q = %v (%T), want json.Number(%s)", key, values[key], values[key], want)
+		}
+	}
+	if len(values) != 3 {
+		t.Fatalf("flattened columns = %v, want three collision-free paths", values)
+	}
+
+	stringsForm := map[string]string{}
+	if err := FlattenStrings("", payload, stringsForm); err != nil {
+		t.Fatalf("FlattenStrings: %v", err)
+	}
+	for key := range values {
+		if _, ok := stringsForm[key]; !ok {
+			t.Errorf("FlattenStrings omitted escaped column %q", key)
 		}
 	}
 }

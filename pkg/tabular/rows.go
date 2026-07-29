@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"io"
+	"mime"
 	"strconv"
 	"strings"
 
@@ -46,7 +47,13 @@ func FormatFromPath(logicalPath, mediaType string) Format {
 		return FormatJSON
 	}
 
-	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	parsedMediaType := strings.TrimSpace(mediaType)
+	if parsedMediaType != "" {
+		if baseType, _, err := mime.ParseMediaType(parsedMediaType); err == nil {
+			parsedMediaType = baseType
+		}
+	}
+	switch strings.ToLower(parsedMediaType) {
 	case "text/csv":
 		return FormatCSV
 	case "application/x-ndjson", "application/jsonl":

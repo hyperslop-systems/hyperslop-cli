@@ -37,7 +37,7 @@ func NewGCCommand() (cmds.Command, error) {
 	return &GCCommand{cmds.NewCommandDescription(
 		"gc",
 		cmds.WithShort("Delete stored bytes that no dataset references"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Delete stored bytes that no dataset version references.
 
 Deleting a dataset version leaves its bytes in place, because other versions may
@@ -47,9 +47,9 @@ Blobs younger than the minimum age are never deleted: a file uploaded into a
 draft that has not yet recorded its metadata row is momentarily unreferenced,
 and the age check is what keeps a sweep from destroying an in-flight upload.
 
-    datadrop dataset gc
-    datadrop dataset gc --min-age-seconds 3600 --format jsonl --output-fields freed_bytes
-`)),
+    {{app}} dataset gc
+    {{app}} dataset gc --min-age-seconds 3600 --format jsonl --output-fields freed_bytes
+`))),
 		cmds.WithFlags(
 			fields.New("min-age-seconds", fields.TypeInteger,
 				fields.WithDefault(0),

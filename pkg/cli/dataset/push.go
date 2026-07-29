@@ -50,20 +50,20 @@ func NewPushCommand() (cmds.Command, error) {
 	return &PushCommand{cmds.NewCommandDescription(
 		"push",
 		cmds.WithShort("Publish a new dataset version"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 Publish a new dataset version.
 
 Each file is hashed locally first, and the server is asked whether it already
 holds those bytes. Files it already has are recorded without being transferred,
 so republishing a dataset with one changed file uploads only that file.
 
-    datadrop dataset push greenhouse readings-2026 \
+    {{app}} dataset push greenhouse readings-2026 \
         --file data/readings.csv --file README.md \
         --title "Greenhouse readings, 2026 season" --license CC-BY-4.0
 
 The transfer summary goes to stderr and the version is the row, so the output
 stays pipeable.
-`)),
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

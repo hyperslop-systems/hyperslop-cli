@@ -42,6 +42,19 @@ func apiError(status int, code string) error {
 	return &client.APIError{Status: status, Code: code, Detail: "test"}
 }
 
+func TestRenderAppTextUsesConfiguredBinaryName(t *testing.T) {
+	original := AppName()
+	t.Cleanup(func() { SetAppName(original) })
+
+	for _, app := range []string{"hyperslop", "datadrop"} {
+		SetAppName(app)
+		got := RenderAppText("{{app}} query greenhouse")
+		if want := app + " query greenhouse"; got != want {
+			t.Fatalf("RenderAppText for %s = %q, want %q", app, got, want)
+		}
+	}
+}
+
 func TestExitOnMapsAPIStatuses(t *testing.T) {
 	cases := []struct {
 		name   string

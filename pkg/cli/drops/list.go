@@ -33,16 +33,16 @@ func NewListCommand() (cmds.Command, error) {
 	return &ListCommand{cmds.NewCommandDescription(
 		"list",
 		cmds.WithShort("List drops"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 List the drops this credential can see, one row per drop.
 
 The output uses Glazed's compact structured-output contract:
 
-    datadrop list
-    datadrop list --format json
-    datadrop list --format csv --output-fields name,created_at
-    datadrop list --format jsonl --output-fields name
-`)),
+    {{app}} list
+    {{app}} list --format json
+    {{app}} list --format csv --output-fields name,created_at
+    {{app}} list --format jsonl --output-fields name
+`))),
 		cmds.WithSections(glazedSection, clientSection),
 	)}, nil
 }

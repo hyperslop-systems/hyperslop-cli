@@ -137,10 +137,21 @@ func (c *Client) Push(
 		query.Set("mode", "simple")
 	}
 
+	resp, err := c.do(ctx, http.MethodPost,
+		"/v1/drops/"+url.PathEscape(drop)+"/events", query, body)
+	if err != nil {
+		return datadrop.AppendResult{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
 	var result datadrop.AppendResult
-	err := c.doJSON(ctx, http.MethodPost,
-		"/v1/drops/"+url.PathEscape(drop)+"/events", query, body, &result)
-	return result, err
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return datadrop.AppendResult{}, errors.Wrap(err, "client: decode append result")
+	}
+	// Duplicate is intentionally absent from JSON: the ingest wire contract
+	// distinguishes an idempotent replay (200) from a new append (201).
+	result.Duplicate = resp.StatusCode == http.StatusOK
+	return result, nil
 }
 
 // Query reads a window of a stream.

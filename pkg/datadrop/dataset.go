@@ -72,6 +72,16 @@ type DatasetFile struct {
 	MediaType string `json:"media_type,omitempty"`
 }
 
+// DeleteDatasetVersionResult identifies the immutable version removed by the
+// delete endpoint. Version is always concrete even when the request used the
+// "latest" alias, so audit rows never lose which version was affected.
+type DeleteDatasetVersionResult struct {
+	Drop    string `json:"drop"`
+	Dataset string `json:"dataset"`
+	Version int    `json:"version"`
+	Deleted bool   `json:"deleted"`
+}
+
 // Manifest is the recognized subset of a version's manifest document.
 //
 // Only these three fields are interpreted and indexed. Everything else in the

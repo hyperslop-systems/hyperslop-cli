@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
 // Flattening rules, pinned so that two consumers agree:
 //
-//   - nested objects use dotted paths ("location.lat");
+//   - nested objects use dotted paths ("location.lat"); literal dots and
+//     backslashes in key segments are escaped ("location\\.lat");
 //   - arrays and any value that cannot be spread across columns are emitted as
 //     compact JSON;
 //   - a missing value is empty, not the string "null";
@@ -53,9 +55,10 @@ func flattenValue(prefix string, value any, emit leafFunc) error {
 			return emit(prefix, typed)
 		}
 		for key, child := range typed {
-			childPrefix := key
+			segment := escapeFlattenSegment(key)
+			childPrefix := segment
 			if prefix != "" {
-				childPrefix = prefix + "." + key
+				childPrefix = prefix + "." + segment
 			}
 			if err := flattenValue(childPrefix, child, emit); err != nil {
 				return err
@@ -75,6 +78,14 @@ func flattenValue(prefix string, value any, emit leafFunc) error {
 		// Scalars, arrays, and anything else are leaves.
 		return emit(prefix, typed)
 	}
+}
+
+// escapeFlattenSegment makes the dotted path representation injective. Without
+// escaping, {"a.b": 1, "a": {"b": 2}} maps two distinct JSON paths onto the
+// same column and whichever map entry is visited last silently wins.
+func escapeFlattenSegment(segment string) string {
+	segment = strings.ReplaceAll(segment, `\`, `\\`)
+	return strings.ReplaceAll(segment, `.`, `\.`)
 }
 
 // FlattenStrings walks raw into cells suitable for a CSV row.

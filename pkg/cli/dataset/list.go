@@ -35,13 +35,13 @@ func NewListCommand() (cmds.Command, error) {
 	return &ListCommand{cmds.NewCommandDescription(
 		"list",
 		cmds.WithShort("List a drop's datasets"),
-		cmds.WithLong(strings.TrimSpace(`
+		cmds.WithLong(ddcli.RenderAppText(strings.TrimSpace(`
 List the datasets in a drop, one row each, with a summary of the newest version.
 
-    datadrop dataset list greenhouse
-    datadrop dataset list greenhouse --format json
-    datadrop dataset list greenhouse --sort-by -latest_bytes
-`)),
+    {{app}} dataset list greenhouse
+    {{app}} dataset list greenhouse --format json
+    {{app}} dataset list greenhouse --sort-by -latest_bytes
+`))),
 		cmds.WithArguments(
 			fields.New("drop", fields.TypeString,
 				fields.WithIsArgument(true),

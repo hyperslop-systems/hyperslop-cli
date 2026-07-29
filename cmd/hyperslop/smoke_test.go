@@ -298,6 +298,22 @@ func TestHyperslopAuthDeviceStartsAgainstRealServer(t *testing.T) {
 	}
 }
 
+func TestHyperslopUsageErrorsExitTwo(t *testing.T) {
+	binary := buildHyperslopClient(t)
+	for _, args := range [][]string{
+		{"definitely-not-a-command"},
+		{"--definitely-not-a-flag"},
+	} {
+		_, stderr, exit := runCLI(t, binary, nil, args...)
+		if exit != 2 {
+			t.Errorf("hyperslop %v exited %d, want 2 (ExitUsage); stderr: %s", args, exit, stderr)
+		}
+		if !strings.HasPrefix(strings.TrimSpace(stderr), "hyperslop:") {
+			t.Errorf("hyperslop %v stderr missing prefix: %s", args, stderr)
+		}
+	}
+}
+
 // TestHyperslopExitCodeOnUnreachableServer: exit-code contract + "hyperslop: "
 // prefix against an unreachable server.
 func TestHyperslopExitCodeOnUnreachableServer(t *testing.T) {

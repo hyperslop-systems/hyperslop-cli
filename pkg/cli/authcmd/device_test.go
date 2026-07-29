@@ -5,12 +5,59 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
 )
+
+func TestPrepareCredentialDestinationCreatesParentsBeforeWriting(t *testing.T) {
+	credentialPath := filepath.Join(t.TempDir(), "nested", "config", "agent.token")
+	if err := prepareCredentialDestination(credentialPath); err != nil {
+		t.Fatalf("prepareCredentialDestination: %v", err)
+	}
+	parentInfo, err := os.Stat(filepath.Dir(credentialPath))
+	if err != nil {
+		t.Fatalf("Stat parent: %v", err)
+	}
+	if got := parentInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("credential parent mode = %o, want 700", got)
+	}
+	if _, err := os.Stat(credentialPath); !os.IsNotExist(err) {
+		t.Fatalf("preflight created the final credential file: %v", err)
+	}
+
+	if err := writeCredentialFile(credentialPath, "ddp_first_secret"); err != nil {
+		t.Fatalf("writeCredentialFile: %v", err)
+	}
+	if err := writeCredentialFile(credentialPath, "ddp_replacement_secret"); err != nil {
+		t.Fatalf("replace credential file: %v", err)
+	}
+	content, err := os.ReadFile(credentialPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(content) != "ddp_replacement_secret\n" {
+		t.Fatalf("credential content = %q", content)
+	}
+	fileInfo, err := os.Stat(credentialPath)
+	if err != nil {
+		t.Fatalf("Stat credential: %v", err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0o600 {
+		t.Fatalf("credential mode = %o, want 600", got)
+	}
+}
+
+func TestPrepareCredentialDestinationRejectsDirectory(t *testing.T) {
+	directory := t.TempDir()
+	if err := prepareCredentialDestination(directory); err == nil {
+		t.Fatal("prepareCredentialDestination accepted a directory as a credential file")
+	}
+}
 
 func TestPollRetriesRateLimitedResponseAfterRetryAfter(t *testing.T) {
 	requests := 0
