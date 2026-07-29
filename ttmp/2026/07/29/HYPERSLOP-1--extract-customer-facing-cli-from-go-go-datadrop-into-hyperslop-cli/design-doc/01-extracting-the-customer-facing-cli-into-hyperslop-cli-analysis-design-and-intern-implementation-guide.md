@@ -29,18 +29,19 @@ RelatedFiles:
       Note: typed HTTP client — the pure customer spine (depends only on pkg/datadrop) that moves cleanly
     - Path: abs:///home/manuel/code/wesen/go-go-golems/go-go-datadrop/pkg/datadrop/device.go
       Note: wire types embedding auth.Scope — the pkg/datadrop->pkg/auth dependency that forces the wire types to move with the scope model (DR-1)
-    - Path: repo://go-go-datadrop/cmd/datadrop/main.go
-      Note: admin entrypoint now imports the 5 registrars from hyperslop-cli (Phase 4/6)
-    - Path: repo://hyperslop-cli/cmd/hyperslop/main.go
-      Note: 'hyperslop entrypoint: names the 5 customer registrars'
-    - Path: repo://hyperslop-cli/pkg/cli/root.go
-      Note: 'hyperslop customer-only root (Phase 5): sets HYPERSLOP identity, attaches whoami + 5 groups, loads customer help'
+    - Path: repo://cmd/hyperslop/main.go
+      Note: hyperslop entrypoint names the five customer registrars
+    - Path: repo://pkg/cli/root.go
+      Note: hyperslop customer-only root and configured identity
+    - Path: ws://go-go-datadrop/cmd/datadrop/main.go
+      Note: admin entrypoint imports the five customer registrars
 ExternalSources: []
 Summary: Extract the customer/agent-facing CLI (drops, events, datasets, schemas, device auth, whoami) and its supporting library (wire types, HTTP client, scope/role model, tabular projection, glazed CLI foundation) out of go-go-datadrop into a new hyperslop-cli binary. The proprietary server and its admin CLI stay in go-go-datadrop and import the customer-facing packages back from hyperslop-cli so nothing is duplicated.
 LastUpdated: 2026-07-29T11:31:44.983890846-04:00
 WhatFor: Onboarding an intern to (a) understand how the datadrop system works today, (b) understand exactly what moves where and why, and (c) execute the extraction in safe phases.
 WhenToUse: Read before touching the split between go-go-datadrop and hyperslop-cli. Follow the phased plan in §10.
 ---
+
 
 
 

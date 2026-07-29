@@ -390,3 +390,165 @@ test always runs.
   by switching those whoami checks to `--format json` (array of one row).
 - **What was tricky:** naming — the test helper `cli(...)` collided with the
   `cli` package imported by main.go (same `package main`); renamed to `runCLI`.
+
+## Step 10: Take over PR #1 and remediate the code review
+
+Audited PR #1 from its actual GitHub head, read every inline review thread, and
+reviewed the work as a takeover rather than treating the comments as a patch
+queue. The extraction architecture is sound and unusually well documented, but
+the inherited implementation had a happy-path bias: clean SSE EOF, failed
+forced downloads, dotted-key collisions, one-time credential ordering, HTTP
+status-only information, and overflow/fail-closed cases lacked adversarial tests.
+
+Fixed all 16 findings with regression coverage, then found and fixed three
+additional release-readiness issues: Dependency Review was unable to run because
+the repository dependency graph was disabled; the template Makefile still said
+`v0.1.14`; and GoReleaser used deprecated snapshot/Homebrew fields. The complete
+assessment and finding-by-finding disposition is in
+`code-review/01-pr-1-takeover-review.md`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issues at https://github.com/hyperslop-systems/hyperslop-cli/pull/1 , in fact take the time to take a step back and assess the work our colleague has been doing, as we are taking over."
+
+**Assistant interpretation:** Take ownership of PR #1, independently assess the inherited implementation and its review feedback, fix every valid issue with tests, and leave an evidence-backed takeover record rather than merely applying suggested lines.
+
+**Inferred user intent:** Make PR #1 safe and merge-ready while ensuring the new owner understands the architectural quality, weaknesses, and remaining release risks.
+
+**Commit (code):** `1871472` — "fix(HYPERSLOP-1): address PR 1 correctness and safety review"
+
+**Commit (companion):** go-go-datadrop `5534a8a` — "fix(HYPERSLOP-1): keep admin CLI aligned with PR review fixes"
+
+### What I did
+
+- Pulled PR metadata, checks, commit list, all 16 review comments, and GraphQL
+  thread state; confirmed the local head exactly matched reviewed SHA `9c13c625`.
+- Validated every finding against the implementation and server wire behavior.
+- Made downloads transactional under `--force`; added single-file manifest hash
+  verification using the resolved immutable version.
+- Reconnected `tail --follow` after clean EOF with bounded backoff and cursor
+  preservation; moved tail order normalization before cursor validation.
+- Escaped literal dot/backslash path segments during flattening.
+- Preserved append duplicate status (HTTP 200 vs 201), delete response bodies,
+  total warning counts, and parameterized media types.
+- Restored Cobra usage exit code 2 in both roots and tested both real binaries.
+- Made role comparison fail closed and rejected duration multiplication overflow.
+- Preflighted credential parents before device authorization and made token writes atomic.
+- Parameterized all shared command examples with `{{app}}`; corrected the embedded row reference.
+- Replaced broken `make install` logic with `go install` and verified a fresh `GOBIN`.
+- Enabled GitHub Dependency Graph through the API; `/dependency-graph/sbom` now succeeds.
+- Migrated deprecated GoReleaser fields and aligned the planned first version to `v0.1.0`.
+- Ran full standalone and workspace tests, lint, vet, gofmt, logcopter, no-cycle,
+  GoReleaser check/build, fresh install, and the complete real-server smoke path.
+
+### Why
+
+- The three P1 findings could silently lose events or user data.
+- The P2 findings broke documented scripting, authorization, integrity, help, or
+  audit contracts and therefore were not cosmetic cleanup.
+- A takeover needs a durable assessment of why the work is good or risky, not
+  only a green patch, so future merge/release decisions do not repeat discovery.
+
+### What worked
+
+- All 16 findings were reproducible from code inspection and resolved without
+  changing the HTTP protocol or adding compatibility adapters.
+- Targeted tests passed after each logical group.
+- Final hyperslop `GOWORK=off go test ./... -count=1`: pass.
+- Final go-go-datadrop `GOWORK=off go test ./... -count=1`: pass, including the
+  53-second binary smoke and server/authz tests.
+- Workspace `go test ./cmd/hyperslop -run TestHyperslop -count=1 -v`: all pass
+  in 48.648s, including full authenticated data path and exit 1/2/3/4/5.
+- Both linters reported `0 issues`; vet and gofmt clean.
+- `goreleaser check` reports one valid configuration; snapshot build succeeds.
+- Repository SBOM endpoint succeeds after enabling Dependency Graph.
+
+### What didn't work
+
+- The first companion server test run failed because the newly decoded response
+  needed an `encoding/json` import. Exact failure:
+
+  `pkg/server/handlers_datasets_test.go:547:12: undefined: json`
+
+  `FAIL github.com/go-go-golems/go-go-datadrop/pkg/server [build failed]`
+
+  Added the import, ran gofmt, and `TestDeleteVersion` passed.
+- Initial PR Dependency Review failed before analyzing dependencies. Exact check error:
+
+  `Dependency review is not supported on this repository. Please ensure that Dependency graph is enabled`
+
+  Enabled Dependency Graph with the repository API and verified the SBOM endpoint;
+  the check must rerun on the pushed head.
+- Initial `goreleaser check` exited 2 because `snapshot.name_template` and `brews`
+  were deprecated. Migrated to `snapshot.version_template` and
+  `homebrew_casks`; validation and snapshot build now pass.
+
+### What I learned
+
+- The colleague made strong macro-level decisions: one-way dependency, no command
+  duplication, no auth aliases, contract tests, phase commits, and excellent diary
+  continuity. Those choices made takeover safe.
+- The review gap was micro-level failure ordering and information preservation.
+  Abstractions that decode JSON can accidentally discard status/body semantics;
+  filesystem code must publish only after successful transfer and verification.
+- Security workflows can fail because repository capabilities are disabled; do
+  not weaken CI before checking repository settings.
+- Shared code needs shared prose parameterization too: dynamic env/error prefixes
+  were insufficient while help examples still hard-coded one binary.
+
+### What was tricky to build
+
+- Single-file verification had a TOCTOU edge: fetching `latest` and then fetching
+  bytes from `latest` could cross a new commit. The exact solution was to fetch
+  the manifest, take its numeric version and digest, then request bytes from that
+  numeric version and publish only after hashing.
+- Safe `--force` handling had to preserve no-clobber behavior too. Forced writes
+  use temp+fsync+rename; non-forced writes use temp+hard-link so a destination
+  created during transfer still cannot be overwritten.
+- SSE reconnect must not retry permanent 401/404 forever. Typed `*client.APIError`
+  returns immediately; clean EOF and transport failures back off from 1s to 30s.
+- Flattened paths needed an injective encoding. Escaping backslash first and dot
+  second distinguishes literal `a.b`, nested `a -> b`, and literal backslashes.
+- Command help lives in both binaries. A deliberate `{{app}}` renderer avoided
+  accidental replacement of product prose while keeping copy/paste examples correct.
+
+### What warrants a second pair of eyes
+
+- Review `pkg/cli/dataset/get.go` publication ordering and Unix rename/link
+  semantics; Windows builds remain disabled in GoReleaser.
+- Review `pkg/cli/events/tail.go` retry policy and whether operators want a
+  reconnect diagnostic on repeated clean EOFs.
+- Confirm `homebrew_casks` is the intended packaging migration and the actual
+  `hyperslop-systems/homebrew` tap exists before tagging.
+- Package-level `AppName`/`ErrorPrefix` state is correct for one CLI root per
+  process but is not designed for concurrently constructing both roots.
+
+### What should be done in the future
+
+- Push both commits, wait for all checks on the new head, resolve the 16 threads,
+  and request a fresh Codex review.
+- Merge/release sequencing remains Phase 9: merge first, confirm external package
+  destinations/secrets, tag hyperslop-cli, then replace go-go-datadrop's local
+  module replacement with the published version.
+
+### Code review instructions
+
+- Start with `ttmp/.../code-review/01-pr-1-takeover-review.md` for the complete map.
+- Safety paths: `pkg/cli/dataset/get.go`, `pkg/cli/events/tail.go`,
+  `pkg/tabular/flatten.go`, and their new tests.
+- Wire/contract paths: `pkg/client/{client,datasets}.go`, `pkg/cli/{root,rows}.go`,
+  `pkg/datadrop/{account,role,dataset}.go`.
+- Validate with:
+  - `cd hyperslop-cli && GOWORK=off go test ./... -count=1 && GOWORK=off golangci-lint run ./...`
+  - `cd go-go-datadrop && GOWORK=off go test ./... -count=1 && GOWORK=off golangci-lint run ./...`
+  - `cd hyperslop-cli && go test ./cmd/hyperslop -run TestHyperslop -count=1 -v`
+  - `GOWORK=off goreleaser check && GOWORK=off goreleaser build --snapshot --clean --single-target`
+
+### Technical details
+
+- PR review head: `9c13c6253f2f9de7ffa5507a6a08bcc9f8ccc425`.
+- Review threads: 16 open before remediation (3 P1, 13 P2).
+- Fix heads: hyperslop-cli `1871472`; go-go-datadrop `5534a8a`.
+- GitHub setting changed: Dependency Graph enabled; no security check was skipped.
+- No HTTP route or JSON field was removed. New `DeleteDatasetVersionResult` types
+  the JSON body the server already emitted.
