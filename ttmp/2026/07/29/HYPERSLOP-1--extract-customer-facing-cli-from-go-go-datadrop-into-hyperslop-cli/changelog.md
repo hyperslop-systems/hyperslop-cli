@@ -178,3 +178,12 @@ Release credential bootstrap: created and narrowly installed the Hyperslop Homeb
 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/ttmp/2026/07/29/HYPERSLOP-1--extract-customer-facing-cli-from-go-go-datadrop-into-hyperslop-cli/reference/02-implementation-diary.md — Non-secret App/bootstrap evidence
 
+
+## 2026-07-30
+
+Release credential bootstrap: stored the Hyperslop Fury upload token directly at kv/ci/release/hyperslop-systems/fury; verified only metadata version 1/key token and securely deleted the local handoff file.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/ttmp/2026/07/29/HYPERSLOP-1--extract-customer-facing-cli-from-go-go-datadrop-into-hyperslop-cli/reference/02-implementation-diary.md — Phase 9 credential-bootstrap record
+
