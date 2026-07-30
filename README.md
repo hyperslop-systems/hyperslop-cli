@@ -192,6 +192,22 @@ go test ./cmd/hyperslop -run TestHyperslop -count=1 -v
 
 The final command requires the sibling `go-go-datadrop` module from the split workspace. Under standalone `GOWORK=off` mode, only server-dependent acceptance tests skip; unit, client, parser, and command tests still run.
 
+## Release signature verification
+
+Release checksum signatures use the dedicated Hyperslop release key ([`keys/hyperslop-release.asc`](keys/hyperslop-release.asc)) with fingerprint:
+
+```
+7B1437943AA1681D5C16AF8FD812D9E6956B8EAF
+```
+
+After downloading a release archive, `checksums.txt`, and `checksums.txt.sig`, verify them before installation:
+
+```bash
+gpg --import keys/hyperslop-release.asc
+gpg --verify checksums.txt.sig checksums.txt
+sha256sum --ignore-missing --check checksums.txt
+```
+
 ## License
 
 See [LICENSE](LICENSE).
