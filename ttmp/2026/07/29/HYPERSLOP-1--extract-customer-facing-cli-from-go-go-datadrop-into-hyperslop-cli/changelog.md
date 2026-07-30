@@ -159,3 +159,13 @@ Phase 9 update: v0.1.0 is available through proxy.golang.org and verified by go 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/README.md — Published module customer quickstart
 - /home/manuel/workspaces/2026-07-29/split-cli/release-hyperslop-v0.1.0/go.mod — Merged published-module pin evidence
 
+
+## 2026-07-30
+
+Prepared scoped Vault/OIDC binary publishing: created Hyperslop Homebrew tap; added reviewable caller/shared-workflow/Terraform contracts. Terraform apply is blocked because the current plan includes seven unrelated destroys; GitHub App/Vault credential bootstrap has not begun.
+
+### Related Files
+
+- /home/manuel/code/wesen/terraform/vault/github-actions/envs/k3s/main.tf — Unapplied role/policy additions
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/.github/workflows/release.yaml — Caller release migration
+

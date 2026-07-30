@@ -13,8 +13,14 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: abs:///home/manuel/code/wesen/go-go-golems/infra-tooling/.github/workflows/publish-goreleaser-release.yml
+      Note: Profile-fixed shared Vault publisher
+    - Path: abs:///home/manuel/code/wesen/terraform/vault/github-actions/envs/k3s/main.tf
+      Note: Hyperslop scoped Vault role declarations
     - Path: repo://.github/workflows/release.yaml
-      Note: Phase 9 tag workflow repaired before v0.1.0 retag (commit bb5ddc8)
+      Note: |-
+        Phase 9 tag workflow repaired before v0.1.0 retag (commit bb5ddc8)
+        Vault OIDC caller release contract
     - Path: repo://README.md
       Note: Customer-facing real-server Hyperslop exercise (commit eadd9b6)
     - Path: repo://cmd/hyperslop/smoke_test.go
@@ -43,6 +49,7 @@ LastUpdated: 2026-07-29T11:31:44.983890846-04:00
 WhatFor: So the build can be reviewed, resumed, and audited against the design doc's phased plan.
 WhenToUse: Read before resuming the HYPERSLOP-1 build or reviewing a phase's correctness.
 ---
+
 
 
 
@@ -1116,3 +1123,57 @@ I validated the merged source with standalone tests, vet, lint, logcopter, a GoR
 - Main release commits: `eadd9b6`, `cb1d645`, `bb5ddc8`.
 - Failed tag workflow: `30494503254`; failure reason: missing `GORELEASER_KEY`.
 - Module checksum: `h1:PAcSlMw5HVkbHvfJtBNP0RNH0CeugQJi1xDrmp5iNpo=`.
+
+## Step 16: Prepare Scoped Vault Publishing for the First Binary Release
+
+I created the public `hyperslop-systems/homebrew` tap and prepared the source, infrastructure, and Terraform changes needed to replace Hyperslop’s missing GitHub Actions release secret with Vault OIDC. The builder role is limited to the shared GoReleaser license; the publisher role is tied to the exact Hyperslop repository, tag workflow, and shared publisher workflow, and it alone can read the approved Homebrew App, Fury, and GPG paths.
+
+The changes are deliberately staged rather than applied. The GitHub App registration and private-key handoff is an operator-only step, and the Terraform plan exposed seven unrelated destroys in the existing remote state. Applying that plan would violate the release playbook’s no-unrelated-mutation rule.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead."
+
+**Assistant interpretation:** Create the Hyperslop Homebrew target and implement the Vault-backed release path up to the point requiring organization GitHub-App registration.
+
+**Inferred user intent:** Replace the broken release-secret dependency with a least-privilege, repeatable binary release process.
+
+### What I did
+- Created `https://github.com/hyperslop-systems/homebrew` as a public tap repository.
+- Added a Hyperslop credential profile and builder/publisher roles to the Vault Terraform configuration.
+- Extended the shared publisher with a fixed Hyperslop profile, GPG import path, and profile-fixed Homebrew target.
+- Replaced direct release secrets in Hyperslop’s tag workflow with Vault OIDC and the reusable publisher.
+- Added a non-secret cross-repository contract harness; Actionlint, both release contracts, Terraform format, and `terraform validate` passed.
+
+### Why
+- The GoReleaser license exists in Vault, but a Hyperslop tag cannot read it without exact OIDC role bindings.
+- App credentials must be scoped to the new Hyperslop tap, never borrowed from Go-Go-Golems.
+
+### What worked
+- The public tap was created successfully.
+- The static release contracts pass for both the existing Sqleton caller and the new Hyperslop caller.
+
+### What didn't work
+- `terraform plan` without `AWS_PROFILE=manuel` failed: `No valid credential sources found`.
+- With the correct profile, the plan proposed `4 to add, 0 to change, 7 to destroy`; the seven destroys are unrelated existing state/config drift, so no apply was performed.
+
+### What I learned
+- A valid Terraform configuration is not sufficient release authority: the saved plan must contain only the intended role/policy additions.
+
+### What was tricky to build
+- The shared publisher previously hardcoded one organization’s Homebrew/Fury paths. The new profile fixes Hyperslop paths and targets inside the reusable workflow, while Terraform determines exactly which profile each repository role may read.
+
+### What warrants a second pair of eyes
+- Review the Terraform state drift before any apply, and review the App’s selected-repository scope before its private key enters Vault.
+
+### What should be done in the future
+- Create the GitHub App after browser login, store its key directly in Vault, provision Hyperslop’s Fury/GPG records, and apply a clean reviewed Terraform plan before tagging `v0.1.1`.
+
+### Code review instructions
+- Run the Hyperslop contract harness with the infra, Terraform, and Hyperslop checkout roots.
+- Review `.github/workflows/release.yaml`, the shared publisher profile case, and Terraform’s `release_publishers` entry together.
+
+### Technical details
+- New roles: `release-hyperslop-cli-builder`, `release-hyperslop-cli-publisher`.
+- Profile: `hyperslop-homebrew-fury-gpg`.
+- Planned paths: `kv/ci/github/hyperslop-systems/homebrew-publisher-app`, `kv/ci/release/hyperslop-systems/fury`, and `kv/ci/release/hyperslop-systems/gpg-signing`.
