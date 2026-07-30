@@ -7,8 +7,10 @@ toolchain go1.26.5
 require (
 	github.com/go-go-golems/glazed v1.4.1
 	github.com/go-go-golems/logcopter v0.1.1
+	github.com/hyperslop-systems/pbui v0.0.0-20260730225710-6f20852567e1
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.10.2
+	google.golang.org/protobuf v1.36.11
 )
 
 require (

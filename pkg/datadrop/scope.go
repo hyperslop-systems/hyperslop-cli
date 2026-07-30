@@ -22,10 +22,12 @@ import (
 type Scope string
 
 const (
-	ScopeDropsRead     Scope = "drops:read"
-	ScopeDropsWrite    Scope = "drops:write"
-	ScopeDatasetsWrite Scope = "datasets:write"
-	ScopeAdmin         Scope = "admin"
+	ScopeDropsRead        Scope = "drops:read"
+	ScopeDropsWrite       Scope = "drops:write"
+	ScopeDatasetsWrite    Scope = "datasets:write"
+	ScopeWorkbenchesRead  Scope = "workbenches:read"
+	ScopeWorkbenchesWrite Scope = "workbenches:write"
+	ScopeAdmin            Scope = "admin"
 )
 
 // AllScopes is every scope, in the order a UI should offer them: least
@@ -35,7 +37,14 @@ const (
 // something a person must understand while creating a token, and a form with
 // fifteen checkboxes gets "select all" clicked every time — at which point
 // scopes have made things worse rather than better.
-var AllScopes = []Scope{ScopeDropsRead, ScopeDropsWrite, ScopeDatasetsWrite, ScopeAdmin}
+var AllScopes = []Scope{
+	ScopeDropsRead,
+	ScopeDropsWrite,
+	ScopeDatasetsWrite,
+	ScopeWorkbenchesRead,
+	ScopeWorkbenchesWrite,
+	ScopeAdmin,
+}
 
 // ScopeSet is a set of scopes.
 type ScopeSet map[Scope]struct{}
