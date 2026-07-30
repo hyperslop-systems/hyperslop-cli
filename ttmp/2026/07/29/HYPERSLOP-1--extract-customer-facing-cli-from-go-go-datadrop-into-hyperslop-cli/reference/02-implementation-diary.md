@@ -1152,6 +1152,8 @@ The changes are deliberately staged rather than applied. The GitHub App registra
 ### What worked
 - The public tap was created successfully.
 - The static release contracts pass for both the existing Sqleton caller and the new Hyperslop caller.
+- Registered `hyperslop-homebrew-publisher` (App ID `4439947`) with webhooks disabled, `Contents: write`/implicit metadata read, and a selected-repository installation containing only `hyperslop-systems/homebrew` (installation `150181944`).
+- Stored the generated App ID and private key at `kv/ci/github/hyperslop-systems/homebrew-publisher-app`; Vault metadata reports version `1` with keys `app_id` and `private_key`. The downloaded PEM was securely deleted after validation.
 
 ### What didn't work
 - `terraform plan` without `AWS_PROFILE=manuel` failed: `No valid credential sources found`.
@@ -1167,7 +1169,7 @@ The changes are deliberately staged rather than applied. The GitHub App registra
 - Review the Terraform state drift before any apply, and review the App’s selected-repository scope before its private key enters Vault.
 
 ### What should be done in the future
-- Create the GitHub App after browser login, store its key directly in Vault, provision Hyperslop’s Fury/GPG records, and apply a clean reviewed Terraform plan before tagging `v0.1.1`.
+- Provision Hyperslop’s Fury/GPG records and apply a clean reviewed Terraform plan before tagging `v0.1.1`. The GitHub App/key bootstrap is complete.
 
 ### Code review instructions
 - Run the Hyperslop contract harness with the infra, Terraform, and Hyperslop checkout roots.
@@ -1177,3 +1179,4 @@ The changes are deliberately staged rather than applied. The GitHub App registra
 - New roles: `release-hyperslop-cli-builder`, `release-hyperslop-cli-publisher`.
 - Profile: `hyperslop-homebrew-fury-gpg`.
 - Planned paths: `kv/ci/github/hyperslop-systems/homebrew-publisher-app`, `kv/ci/release/hyperslop-systems/fury`, and `kv/ci/release/hyperslop-systems/gpg-signing`.
+- App bootstrap evidence only: App ID `4439947`, installation `150181944`, Vault record version `1`; no secret value was read or recorded.

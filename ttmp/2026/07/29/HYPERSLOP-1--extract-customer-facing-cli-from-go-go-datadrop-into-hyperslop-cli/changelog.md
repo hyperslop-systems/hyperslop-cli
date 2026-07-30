@@ -169,3 +169,12 @@ Prepared scoped Vault/OIDC binary publishing: created Hyperslop Homebrew tap; ad
 - /home/manuel/code/wesen/terraform/vault/github-actions/envs/k3s/main.tf — Unapplied role/policy additions
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/.github/workflows/release.yaml — Caller release migration
 
+
+## 2026-07-30
+
+Release credential bootstrap: created and narrowly installed the Hyperslop Homebrew publisher App; stored its ID/private key directly in the fixed Vault path and deleted the downloaded PEM. Non-secret Vault metadata verified version 1. Terraform apply and Fury/GPG credential provisioning remain pending.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/ttmp/2026/07/29/HYPERSLOP-1--extract-customer-facing-cli-from-go-go-datadrop-into-hyperslop-cli/reference/02-implementation-diary.md — Non-secret App/bootstrap evidence
+
