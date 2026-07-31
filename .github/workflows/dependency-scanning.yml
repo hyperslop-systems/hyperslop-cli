@@ -25,9 +25,14 @@ jobs:
   govulncheck:
     name: Go Vulnerability Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-private-go
       
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -43,9 +48,14 @@ jobs:
   gosec:
     name: GoSec Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-private-go
       
       - name: Set up Go
         uses: actions/setup-go@v6

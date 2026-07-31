@@ -9,10 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/setup-private-go
       - run: git fetch --force --tags
       - uses: actions/setup-go@v6
         with:

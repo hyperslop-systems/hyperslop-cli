@@ -64,7 +64,12 @@ func TestValidateDeviceScopesRejectsAdmin(t *testing.T) {
 	if err := ValidateDeviceScopes([]Scope{ScopeAdmin}); err == nil {
 		t.Error("a device credential was allowed to carry admin")
 	}
-	if err := ValidateDeviceScopes([]Scope{ScopeDropsRead, ScopeDropsWrite}); err != nil {
+	if err := ValidateDeviceScopes([]Scope{
+		ScopeDropsRead,
+		ScopeDropsWrite,
+		ScopeWorkbenchesRead,
+		ScopeWorkbenchesWrite,
+	}); err != nil {
 		t.Errorf("operational scopes should validate for a device credential: %v", err)
 	}
 }

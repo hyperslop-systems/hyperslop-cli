@@ -7,7 +7,6 @@ package client
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -416,38 +415,7 @@ func (c *Client) doJSON(
 func (c *Client) do(
 	ctx context.Context, method, path string, query url.Values, body []byte,
 ) (*http.Response, error) {
-	endpoint := c.BaseURL + path
-	if len(query) > 0 {
-		endpoint += "?" + query.Encode()
-	}
-
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
-	if err != nil {
-		return nil, errors.Wrapf(err, "client: build %s %s", method, path)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
-	}
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "client: %s %s", method, path)
-	}
-
-	if resp.StatusCode >= 400 {
-		defer func() { _ = resp.Body.Close() }()
-		return nil, apiErrorFrom(resp)
-	}
-
-	return resp, nil
+	return c.doWithHeaders(ctx, method, path, query, body, nil)
 }
 
 // StartDeviceAuthorization begins a browser-approved device pairing flow.

@@ -1,0 +1,40 @@
+name: Set up private Go dependencies
+description: Mint a short-lived read-only token for Hyperslop CLI's private Go modules.
+
+runs:
+  using: composite
+  steps:
+    - name: Read GitHub App credentials from Vault
+      uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
+      with:
+        url: https://vault.yolo.scapegoat.dev
+        method: jwt
+        path: github-actions
+        role: hyperslop-cli-private-dependencies
+        jwtGithubAudience: https://vault.yolo.scapegoat.dev
+        secrets: |
+          kv/data/ci/github/hyperslop-systems/private-dependencies-app app_id | PRIVATE_DEPENDENCY_APP_ID ;
+          kv/data/ci/github/hyperslop-systems/private-dependencies-app private_key | PRIVATE_DEPENDENCY_APP_PRIVATE_KEY
+
+    - name: Mint private dependency token
+      id: app-token
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ env.PRIVATE_DEPENDENCY_APP_ID }}
+        private-key: ${{ env.PRIVATE_DEPENDENCY_APP_PRIVATE_KEY }}
+        owner: hyperslop-systems
+        repositories: pbui
+
+    - name: Configure private Go module authentication
+      shell: bash
+      env:
+        PRIVATE_DEPENDENCY_TOKEN: ${{ steps.app-token.outputs.token }}
+      run: |
+        set -euo pipefail
+        git config --global \
+          url."https://x-access-token:${PRIVATE_DEPENDENCY_TOKEN}@github.com/".insteadOf \
+          "https://github.com/"
+        {
+          echo "GOPRIVATE=github.com/hyperslop-systems/*"
+          echo "GONOSUMDB=github.com/hyperslop-systems/*"
+        } >> "$GITHUB_ENV"

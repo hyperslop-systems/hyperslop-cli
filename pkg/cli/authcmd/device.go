@@ -54,7 +54,7 @@ once on stdout.
 
 Capture stdout directly, never paste a ZITADEL/OIDC bearer token into Datadrop:
 
-    export `+appUpper+`_TOKEN="$(`+app+` auth device --name 'local coding agent' --scopes drops:read,drops:write --expires-in 24h)"
+    export `+appUpper+`_TOKEN="$(`+app+` auth device --name 'local coding agent' --scopes drops:read,drops:write,workbenches:read,workbenches:write --expires-in 24h)"
 
 Or write an owner-only credential file:
 
@@ -69,7 +69,7 @@ Or write an owner-only credential file:
 				fields.WithHelp("human-readable name shown to the approving user")),
 			fields.New("scopes", fields.TypeStringList,
 				fields.WithDefault([]string{"drops:read"}),
-				fields.WithHelp("comma-separated requested datadrop scopes (admin is not allowed)")),
+				fields.WithHelp("comma-separated operational scopes: drops:read, drops:write, datasets:write, workbenches:read, workbenches:write")),
 			fields.New("expires-in", fields.TypeString,
 				fields.WithDefault("24h"),
 				fields.WithHelp("required token lifetime, at most 30d")),

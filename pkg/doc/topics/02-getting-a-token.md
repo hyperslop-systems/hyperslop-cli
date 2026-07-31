@@ -38,7 +38,7 @@ The token is printed **once** to stdout (so it can be captured) or written to a
 variable:
 
 ```bash
-export HYPERSLOP_TOKEN="$(hyperslop auth device --name 'local coding agent' --scopes drops:read,drops:write --expires-in 24h)"
+export HYPERSLOP_TOKEN="$(hyperslop auth device --name 'local coding agent' --scopes drops:read,drops:write,workbenches:read,workbenches:write --expires-in 24h)"
 ```
 
 Or write an owner-only file and point the environment at it:
@@ -53,11 +53,31 @@ is `datadrop auth device`; the flow is identical.)
 
 ## Scopes
 
-Device tokens may carry only operational data scopes — `drops:read`,
-`drops:write`, `datasets:write` — never `admin`. The server rejects an
-`admin` request at pairing time. A token narrows its owner's rights; it never
-carries rights of its own, and revoking membership on a drop instantly narrows
-every token that owner holds.
+Device tokens may carry only operational scopes:
+
+- `drops:read` reads drop metadata and events.
+- `drops:write` appends and modifies drop data.
+- `datasets:write` uploads and modifies datasets.
+- `workbenches:read` lists workbenches, reads snapshots, and follows revision
+  streams.
+- `workbenches:write` creates, replaces, mutates, and deletes workbenches.
+
+Device tokens may never carry `admin`; the server rejects an `admin` request at
+pairing time. A token narrows its owner's rights; it never carries rights of its
+own, and revoking membership on a drop instantly narrows every token that owner
+holds.
+
+For a read-only workbench observer:
+
+```bash
+hyperslop auth device --scopes workbenches:read
+```
+
+For an agent that authors workbench layouts and tile content:
+
+```bash
+hyperslop auth device --scopes workbenches:read,workbenches:write
+```
 
 ## Verify
 

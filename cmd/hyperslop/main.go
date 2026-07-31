@@ -19,6 +19,7 @@ import (
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/cli/drops"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/cli/events"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/cli/schemacmd"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/cli/uicmd"
 )
 
 // The group registrars are named here rather than inside pkg/cli, because the
@@ -32,5 +33,6 @@ func main() {
 		events.Register,
 		schemacmd.Register,
 		dataset.Register,
+		uicmd.Register,
 	))
 }
