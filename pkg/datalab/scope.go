@@ -1,4 +1,4 @@
-package datadrop
+package datalab
 
 import (
 	"sort"
@@ -13,9 +13,9 @@ import (
 // what we ask Zitadel for; these are what a credential may do here. The two
 // never mix and never appear in the same field. See the user-accounts guide §3.
 //
-// Scope lives in the datadrop wire-types package because the wire types embed it
+// Scope lives in the datalab wire-types package because the wire types embed it
 // (a DeviceAuthorization carries requested scopes; an APIToken carries its
-// scopes; a Member carries a Role). Keeping the model here makes pkg/datadrop a
+// scopes; a Member carries a Role). Keeping the model here makes pkg/datalab a
 // pure leaf with no dependency on any auth package, which is what lets the
 // customer CLI (hyperslop-cli) own the wire contract without importing the
 // proprietary server.

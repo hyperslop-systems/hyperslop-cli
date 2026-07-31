@@ -9,7 +9,7 @@ import (
 //
 // It mirrors server.MeResponse. Duplicated rather than imported so the client
 // does not depend on the server package for one struct — the same reason the
-// rest of pkg/client speaks pkg/datadrop and not pkg/store.
+// rest of pkg/client speaks pkg/datalab and not pkg/store.
 type Me struct {
 	AuthMode      string   `json:"auth_mode"`
 	Authenticated bool     `json:"authenticated"`

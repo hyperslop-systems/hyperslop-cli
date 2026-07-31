@@ -22,7 +22,7 @@ import (
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // GetCommand downloads a dataset version.
@@ -39,7 +39,7 @@ type GetCommand struct {
 
 var _ cmds.BareCommand = &GetCommand{}
 
-// NewGetCommand builds `datadrop dataset get DROP DATASET`.
+// NewGetCommand builds `datalab dataset get DROP DATASET`.
 func NewGetCommand() (cmds.Command, error) {
 	clientSection, err := ddcli.NewClientSection()
 	if err != nil {
@@ -117,7 +117,7 @@ func (c *GetCommand) Run(ctx context.Context, vals *values.Values) error {
 		return err
 	}
 	if s.Version == "" {
-		s.Version = datadrop.LatestVersion
+		s.Version = datalab.LatestVersion
 	}
 
 	api, err := ddcli.ClientFrom(vals)
@@ -227,7 +227,7 @@ func downloadVersion(ctx context.Context, api *client.Client, s *getSettings) er
 		// The logical path is server-validated, but this is the moment where a
 		// hostile path would escape the output directory, so it is checked again
 		// on the machine that is about to write it.
-		if err := datadrop.ValidateDatasetPath(file.Path); err != nil {
+		if err := datalab.ValidateDatasetPath(file.Path); err != nil {
 			return errors.Wrapf(err, "refusing to write %q", file.Path)
 		}
 		body, err := api.DownloadDatasetFile(ctx, s.Drop, s.Dataset, concreteVersion, file.Path)
@@ -456,7 +456,7 @@ func downloadTempName(parent string) (string, error) {
 	if _, err := rand.Read(suffix[:]); err != nil {
 		return "", errors.Wrap(err, "mint download temporary name")
 	}
-	return path.Join(parent, ".datadrop-"+hex.EncodeToString(suffix[:])+".tmp"), nil
+	return path.Join(parent, ".datalab-"+hex.EncodeToString(suffix[:])+".tmp"), nil
 }
 
 // streamToDestination writes a single response to stdout or publishes it to a
@@ -568,9 +568,9 @@ func streamToDestinationWithCopier(
 const maxArchiveMetadataBytes = 16 << 20
 
 func copyVerifiedDatasetArchive(
-	dst io.Writer, body io.Reader, files []datadrop.DatasetFile,
+	dst io.Writer, body io.Reader, files []datalab.DatasetFile,
 ) error {
-	expected := make(map[string]datadrop.DatasetFile, len(files))
+	expected := make(map[string]datalab.DatasetFile, len(files))
 	for _, file := range files {
 		expected[file.Path] = file
 	}

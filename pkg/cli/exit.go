@@ -34,7 +34,7 @@ const (
 )
 
 // errorPrefix is what every diagnostic starts with. Set it once per binary
-// with SetErrorPrefix ("hyperslop: " for the customer CLI, "datadrop: " for the
+// with SetErrorPrefix ("hyperslop: " for the customer CLI, "datalab: " for the
 // admin CLI) so every error path uses one spelling.
 var errorPrefix = "hyperslop: "
 

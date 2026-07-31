@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // The stream-within-a-drop flag is ddcli.DropStreamFlag, shared with the four
@@ -29,7 +29,7 @@ type rangeSettings struct {
 // rangeFields declares the bounds. defaultLimit differs per verb: a query pages
 // 50, a tail shows the last 10, an export takes everything it is allowed.
 func rangeFields(defaultLimit int) []*fields.Definition {
-	return rangeFieldsWithOrder(defaultLimit, string(datadrop.OrderDesc))
+	return rangeFieldsWithOrder(defaultLimit, string(datalab.OrderDesc))
 }
 
 func rangeFieldsWithOrder(defaultLimit int, defaultOrder string) []*fields.Definition {
@@ -63,8 +63,8 @@ func rangeFieldsWithOrder(defaultLimit int, defaultOrder string) []*fields.Defin
 
 // query builds an EventQuery, reporting bad flag values before any request is
 // made — a usage error must not cost a round trip.
-func (s *rangeSettings) query(drop string) (datadrop.EventQuery, error) {
-	q := datadrop.EventQuery{
+func (s *rangeSettings) query(drop string) (datalab.EventQuery, error) {
+	q := datalab.EventQuery{
 		Drop:   drop,
 		Stream: s.Stream,
 		Limit:  s.Limit,
@@ -72,15 +72,15 @@ func (s *rangeSettings) query(drop string) (datadrop.EventQuery, error) {
 		Before: s.Before,
 	}
 
-	order, err := datadrop.ParseOrder(s.Order)
+	order, err := datalab.ParseOrder(s.Order)
 	if err != nil {
-		return datadrop.EventQuery{}, err
+		return datalab.EventQuery{}, err
 	}
 	q.Order = order
 
-	timeField, err := datadrop.ParseTimeField(s.TimeField)
+	timeField, err := datalab.ParseTimeField(s.TimeField)
 	if err != nil {
-		return datadrop.EventQuery{}, err
+		return datalab.EventQuery{}, err
 	}
 	q.TimeField = timeField
 
@@ -97,14 +97,14 @@ func (s *rangeSettings) query(drop string) (datadrop.EventQuery, error) {
 		}
 		parsed, err := time.Parse(time.RFC3339, bound.value)
 		if err != nil {
-			return datadrop.EventQuery{}, errors.Wrapf(err,
+			return datalab.EventQuery{}, errors.Wrapf(err,
 				"invalid %s %q: expected an RFC3339 timestamp", bound.name, bound.value)
 		}
 		*bound.field = parsed.UTC()
 	}
 
 	if err := q.Normalize(); err != nil {
-		return datadrop.EventQuery{}, err
+		return datalab.EventQuery{}, err
 	}
 	return q, nil
 }

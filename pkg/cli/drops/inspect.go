@@ -21,13 +21,13 @@ type InspectCommand struct {
 
 var _ cmds.GlazeCommand = &InspectCommand{}
 
-// NewInspectCommand builds `datadrop inspect DROP`.
+// NewInspectCommand builds `datalab inspect DROP`.
 //
 // It returns one row rather than an indented JSON object, which looks like
 // ceremony and is not. It makes --format json mean the same thing here as it
 // does for list — an array, not a bare object, so a script does not have to
 // know which verb it called. The structured output projection also makes
-// `datadrop inspect X --output-fields event_count` possible without jq.
+// `datalab inspect X --output-fields event_count` possible without jq.
 func NewInspectCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {

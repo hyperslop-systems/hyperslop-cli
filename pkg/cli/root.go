@@ -1,6 +1,6 @@
 // Package cli assembles the hyperslop command tree.
 //
-// hyperslop is the agent/customer-facing CLI for the datadrop backend: a thin
+// hyperslop is the agent/customer-facing CLI for the datalab backend: a thin
 // client of the server's HTTP API. It exposes the data verbs (create, push,
 // query, tail, export, dataset, schema), the device-pairing auth flow, and
 // whoami — and nothing operator-only: no serve, no healthcheck. If a verb works
@@ -34,15 +34,15 @@ import (
 // client section, row projections and exit helper.
 func NewHyperslopRootCmd(registrars ...Registrar) (*cobra.Command, error) {
 	// The customer binary's identity: HYPERSLOP_* env vars and the "hyperslop: "
-	// diagnostic prefix. The admin datadrop binary sets these to "datadrop".
+	// diagnostic prefix. The admin datalab binary sets these to "datalab".
 	SetAppName("hyperslop")
 	SetErrorPrefix("hyperslop: ")
 
 	root := &cobra.Command{
 		Use:   "hyperslop",
-		Short: "Agent/customer CLI for the datadrop backend",
+		Short: "Agent/customer CLI for the datalab backend",
 		Long: strings.TrimSpace(`
-hyperslop is the agent/customer-facing client for a datadrop server: it accepts
+hyperslop is the agent/customer-facing client for a datalab server: it accepts
 append-only event data, reads latest-N and time-range queries, tails a live SSE
 feed, exports CSV/NDJSON/JSON, publishes and retrieves bulk datasets, manages
 JSON Schema contracts, and pairs through a browser-approved device flow to mint

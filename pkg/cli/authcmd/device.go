@@ -17,7 +17,7 @@ import (
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // DeviceCommand runs the agent half of the browser-approved device pairing
@@ -52,24 +52,24 @@ token. The command prints a URL and a short code to stderr. Sign in to that URL
 in a browser and verify the code; this process then prints the token exactly
 once on stdout.
 
-Capture stdout directly, never paste a ZITADEL/OIDC bearer token into Datadrop:
+Capture stdout directly, never paste a ZITADEL/OIDC bearer token into Datalab:
 
     export `+appUpper+`_TOKEN="$(`+app+` auth device --name 'local coding agent' --scopes drops:read,drops:write --expires-in 24h)"
 
 Or write an owner-only credential file:
 
-    `+app+` auth device --credential-file ~/.config/datadrop/agent.token
+    `+app+` auth device --credential-file ~/.config/datalab/agent.token
 `)),
 		cmds.WithFlags(
 			fields.New("addr", fields.TypeString,
 				fields.WithDefault(envOr(appUpper+"_ADDR", "http://localhost:8080")),
-				fields.WithHelp("datadrop server base URL [$"+appUpper+"_ADDR]")),
+				fields.WithHelp("datalab server base URL [$"+appUpper+"_ADDR]")),
 			fields.New("name", fields.TypeString,
 				fields.WithDefault("coding agent"),
 				fields.WithHelp("human-readable name shown to the approving user")),
 			fields.New("scopes", fields.TypeStringList,
 				fields.WithDefault([]string{"drops:read"}),
-				fields.WithHelp("comma-separated requested datadrop scopes (admin is not allowed)")),
+				fields.WithHelp("comma-separated requested datalab scopes (admin is not allowed)")),
 			fields.New("expires-in", fields.TypeString,
 				fields.WithDefault("24h"),
 				fields.WithHelp("required token lifetime, at most 30d")),
@@ -88,14 +88,14 @@ func (c *DeviceCommand) Run(ctx context.Context, vals *values.Values) error {
 	if err := vals.DecodeSectionInto(schema.DefaultSlug, settings); err != nil {
 		return err
 	}
-	if err := datadrop.ValidateTokenName(settings.Name); err != nil {
+	if err := datalab.ValidateTokenName(settings.Name); err != nil {
 		return err
 	}
 	scopes, err := parseScopes(settings.Scopes)
 	if err != nil {
 		return err
 	}
-	if err := datadrop.ValidateDeviceScopes(scopes); err != nil {
+	if err := datalab.ValidateDeviceScopes(scopes); err != nil {
 		return err
 	}
 	timeout, err := time.ParseDuration(settings.Timeout)
@@ -122,7 +122,7 @@ func (c *DeviceCommand) Run(ctx context.Context, vals *values.Values) error {
 	pairCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	started, err := api.StartDeviceAuthorization(pairCtx, datadrop.StartDeviceAuthorizationRequest{
+	started, err := api.StartDeviceAuthorization(pairCtx, datalab.StartDeviceAuthorizationRequest{
 		Name: settings.Name, Scopes: scopes, ExpiresIn: settings.ExpiresIn,
 	})
 	if err != nil {
@@ -148,13 +148,13 @@ func (c *DeviceCommand) Run(ctx context.Context, vals *values.Values) error {
 	return err
 }
 
-func parseScopes(raw []string) ([]datadrop.Scope, error) {
-	var scopes []datadrop.Scope
+func parseScopes(raw []string) ([]datalab.Scope, error) {
+	var scopes []datalab.Scope
 	for _, value := range raw {
 		for _, part := range strings.Split(value, ",") {
 			part = strings.TrimSpace(part)
 			if part != "" {
-				scopes = append(scopes, datadrop.Scope(part))
+				scopes = append(scopes, datalab.Scope(part))
 			}
 		}
 	}
@@ -164,30 +164,30 @@ func parseScopes(raw []string) ([]datadrop.Scope, error) {
 // poll drives the RFC-8628-style polling loop. The wait interval and the
 // "still pending" interpretation live here; the HTTP is the client's.
 func poll(
-	ctx context.Context, api *client.Client, started datadrop.StartDeviceAuthorizationResponse,
-) (datadrop.DeviceTokenResponse, error) {
+	ctx context.Context, api *client.Client, started datalab.StartDeviceAuthorizationResponse,
+) (datalab.DeviceTokenResponse, error) {
 	return pollWithWait(ctx, api, started, wait)
 }
 
 func pollWithWait(
-	ctx context.Context, api *client.Client, started datadrop.StartDeviceAuthorizationResponse,
+	ctx context.Context, api *client.Client, started datalab.StartDeviceAuthorizationResponse,
 	waitFor func(context.Context, time.Duration) error,
-) (datadrop.DeviceTokenResponse, error) {
+) (datalab.DeviceTokenResponse, error) {
 	interval := time.Duration(started.Interval) * time.Second
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
 	for {
 		if err := waitFor(ctx, interval); err != nil {
-			return datadrop.DeviceTokenResponse{}, errors.Wrap(err, "waiting for browser approval")
+			return datalab.DeviceTokenResponse{}, errors.Wrap(err, "waiting for browser approval")
 		}
-		token, err := api.PollDeviceToken(ctx, datadrop.PollDeviceTokenRequest{DeviceCode: started.DeviceCode})
+		token, err := api.PollDeviceToken(ctx, datalab.PollDeviceTokenRequest{DeviceCode: started.DeviceCode})
 		if err == nil {
 			return token, nil
 		}
 		var apiErr *client.APIError
 		if !errors.As(err, &apiErr) {
-			return datadrop.DeviceTokenResponse{}, err
+			return datalab.DeviceTokenResponse{}, err
 		}
 		switch apiErr.Code {
 		case "AuthorizationPending":
@@ -201,9 +201,9 @@ func pollWithWait(
 			}
 			continue
 		case "ExpiredToken":
-			return datadrop.DeviceTokenResponse{}, errors.New("device authorization expired before approval")
+			return datalab.DeviceTokenResponse{}, errors.New("device authorization expired before approval")
 		default:
-			return datadrop.DeviceTokenResponse{}, errors.Errorf("device authorization failed: %s", apiErr.Detail)
+			return datalab.DeviceTokenResponse{}, errors.Errorf("device authorization failed: %s", apiErr.Detail)
 		}
 	}
 }

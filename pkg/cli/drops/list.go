@@ -19,7 +19,7 @@ type ListCommand struct {
 
 var _ cmds.GlazeCommand = &ListCommand{}
 
-// NewListCommand builds `datadrop list`.
+// NewListCommand builds `datalab list`.
 func NewListCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {

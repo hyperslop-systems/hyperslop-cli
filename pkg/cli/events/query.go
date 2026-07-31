@@ -12,7 +12,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // QueryCommand reads a window of a stream.
@@ -22,7 +22,7 @@ type QueryCommand struct {
 
 var _ cmds.GlazeCommand = &QueryCommand{}
 
-// NewQueryCommand builds `datadrop query DROP`.
+// NewQueryCommand builds `datalab query DROP`.
 func NewQueryCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {
@@ -59,7 +59,7 @@ For the original nested envelope rather than a flattened row, use
 				fields.WithIsArgument(true),
 				fields.WithHelp("the drop to read")),
 		),
-		cmds.WithFlags(rangeFields(datadrop.DefaultLimit)...),
+		cmds.WithFlags(rangeFields(datalab.DefaultLimit)...),
 		cmds.WithSections(glazedSection, clientSection),
 	)}, nil
 }
@@ -100,7 +100,7 @@ func (c *QueryCommand) RunIntoGlazeProcessor(
 // Every event in this package goes through it, so there is exactly one
 // flattening (guide §19, "two flatteners"): a verb that built its own row would
 // make --output-fields data.temp_c work on query and return empty on tail.
-func emitEvents(ctx context.Context, gp middlewares.Processor, events []datadrop.Envelope) error {
+func emitEvents(ctx context.Context, gp middlewares.Processor, events []datalab.Envelope) error {
 	rows, err := ddcli.RowsForEnvelopes(events)
 	if err != nil {
 		return err

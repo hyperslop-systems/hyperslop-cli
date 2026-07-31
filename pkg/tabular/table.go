@@ -1,7 +1,7 @@
-// Package tabular is the single projection from a datadrop source to a table.
+// Package tabular is the single projection from a datalab source to a table.
 //
 // A chart does not consume "a stream" or "a dataset". It consumes a table: an
-// ordered list of named, typed columns plus rows. Both of datadrop's storage
+// ordered list of named, typed columns plus rows. Both of datalab's storage
 // shapes — the append-only event log and the immutable dataset version — reduce
 // to that one type here, on the server, and nowhere else.
 //
@@ -10,12 +10,12 @@
 // implementation in the browser would be a second answer to "what are the
 // columns", with nothing forcing the two to agree.
 //
-// This package imports pkg/datadrop and nothing else from this repository. In
+// This package imports pkg/datalab and nothing else from this repository. In
 // particular it does not import pkg/store, so its tests link no SQLite driver
 // and run against literals.
 package tabular
 
-import "github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+import "github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 
 // FieldType is the visual-encoding type of a column.
 //
@@ -182,7 +182,7 @@ var EnvelopeColumns = []string{
 const DataPrefix = "data."
 
 // envelopeTypes fixes the encoding type of each envelope column. These are
-// properties of the envelope shape (pkg/datadrop/event.go), not observations,
+// properties of the envelope shape (pkg/datalab/event.go), not observations,
 // so they are never inferred.
 var envelopeTypes = map[string]FieldType{
 	"id":          TypeNominal,
@@ -210,4 +210,4 @@ func ClampRows(requested int) int {
 }
 
 // canonicalTime renders an envelope timestamp the way every other layer does.
-var canonicalTime = datadrop.FormatTime
+var canonicalTime = datalab.FormatTime

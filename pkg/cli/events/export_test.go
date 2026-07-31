@@ -10,7 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestExportQueryHonorsDirectionalCursorOrder(t *testing.T) {
@@ -20,14 +20,14 @@ func TestExportQueryHonorsDirectionalCursorOrder(t *testing.T) {
 		after  int64
 		before int64
 	}{
-		{"ascending after", string(datadrop.OrderAsc), 10, 0},
-		{"descending before", string(datadrop.OrderDesc), 0, 20},
+		{"ascending after", string(datalab.OrderAsc), 10, 0},
+		{"descending before", string(datalab.OrderDesc), 0, 20},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := exportSettings{
 				Drop: "greenhouse",
 				rangeSettings: rangeSettings{
-					Order: tc.order, After: tc.after, Before: tc.before, Limit: datadrop.MaxLimit,
+					Order: tc.order, After: tc.after, Before: tc.before, Limit: datalab.MaxLimit,
 				},
 			}
 			q, err := s.query(s.Drop)

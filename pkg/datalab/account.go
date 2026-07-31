@@ -1,4 +1,4 @@
-package datadrop
+package datalab
 
 import (
 	"math"
@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// User is a person, as datadrop knows them.
+// User is a person, as datalab knows them.
 //
 // Identity itself lives in the OIDC provider: it owns the password, the MFA
 // factors, the email verification and the registration form. What is here is
@@ -28,8 +28,8 @@ type User struct {
 	Name       string    `json:"name,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	LastSeenAt time.Time `json:"last_seen_at"`
-	// Disabled locks an account out of datadrop without touching the identity
-	// provider — because "this account is uploading garbage" is a datadrop
+	// Disabled locks an account out of datalab without touching the identity
+	// provider — because "this account is uploading garbage" is a datalab
 	// problem, not an identity problem.
 	Disabled bool `json:"disabled,omitempty"`
 }
