@@ -97,7 +97,8 @@ func ExitCodeFor(err error) int {
 		case http.StatusNotFound:
 			return ExitNotFound
 		case http.StatusBadRequest, http.StatusUnprocessableEntity,
-			http.StatusConflict, http.StatusRequestEntityTooLarge:
+			http.StatusConflict, http.StatusPreconditionFailed,
+			http.StatusRequestEntityTooLarge:
 			return ExitValidation
 		}
 	}

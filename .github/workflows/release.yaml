@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/setup-private-go
       - run: git fetch --force --tags
       - uses: actions/setup-go@v6
         with:
@@ -57,6 +58,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/setup-private-go
       - run: git fetch --force --tags
       - uses: actions/setup-go@v6
         with:

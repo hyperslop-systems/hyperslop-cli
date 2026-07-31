@@ -1,6 +1,7 @@
 package uicmd
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -100,12 +101,24 @@ func TestListCommandEmitsStructuredWorkbenchRows(t *testing.T) {
 }
 
 func TestStreamCommandEmitsStructuredRevisionRows(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/workbenches/bench-1/stream" || r.URL.Query().Get("after") != "7" {
+		requests++
+		wantAfter := "7"
+		if requests > 1 {
+			wantAfter = "8"
+		}
+		if r.URL.Path != "/v1/workbenches/bench-1/stream" || r.URL.Query().Get("after") != wantAfter {
 			t.Errorf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
 		if r.Header.Get("Authorization") != "Bearer command-token" {
 			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		if requests > 1 {
+			cancel()
+			return
 		}
 		data, err := workbenchapi.Marshal(&workbenchv1.WorkbenchUpdatedEvent{
 			WorkbenchId: "bench-1", Revision: 8,
@@ -134,7 +147,7 @@ func TestStreamCommandEmitsStructuredRevisionRows(t *testing.T) {
 	}
 	previous := os.Stdout
 	os.Stdout = write
-	executeErr := root.Execute()
+	executeErr := root.ExecuteContext(ctx)
 	_ = write.Close()
 	os.Stdout = previous
 	output, readErr := io.ReadAll(read)

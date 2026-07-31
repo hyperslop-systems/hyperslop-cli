@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -15,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
 )
 
 // StreamCommand emits workbench revision invalidations until its context is
@@ -88,36 +90,7 @@ func (c *StreamCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	events, errs, err := api.StreamWorkbench(ctx, s.WorkbenchID, after)
-	if err != nil {
-		return err
-	}
-	for events != nil || errs != nil {
-		select {
-		case <-ctx.Done():
-			return nil
-		case event, ok := <-events:
-			if !ok {
-				events = nil
-				continue
-			}
-			if err := processor.AddRow(ctx, types.NewRow(
-				types.MRP("workbench_id", event.WorkbenchID),
-				types.MRP("revision", strconv.FormatUint(event.Revision, 10)),
-			)); err != nil {
-				return err
-			}
-		case streamErr, ok := <-errs:
-			if !ok {
-				errs = nil
-				continue
-			}
-			if streamErr != nil {
-				return streamErr
-			}
-		}
-	}
-	return nil
+	return followWorkbenchStream(ctx, processor, api, s.WorkbenchID, after)
 }
 
 func parseAfterRevision(value string) (uint64, error) {
@@ -126,4 +99,123 @@ func parseAfterRevision(value string) (uint64, error) {
 		return 0, errors.Errorf("--after must be an unsigned integer, got %q", value)
 	}
 	return revision, nil
+}
+
+const (
+	workbenchReconnectInitial = time.Second
+	workbenchReconnectMaximum = 30 * time.Second
+)
+
+func followWorkbenchStream(
+	ctx context.Context,
+	processor middlewares.Processor,
+	api *client.Client,
+	workbenchID string,
+	after uint64,
+) error {
+	return followWorkbenchStreamWithWait(
+		ctx, processor, api, workbenchID, after, waitForWorkbenchReconnect,
+	)
+}
+
+func followWorkbenchStreamWithWait(
+	ctx context.Context,
+	processor middlewares.Processor,
+	api *client.Client,
+	workbenchID string,
+	after uint64,
+	waitFor func(context.Context, time.Duration) error,
+) error {
+	reconnectDelay := workbenchReconnectInitial
+	for {
+		events, errs, err := api.StreamWorkbench(ctx, workbenchID, after)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			var apiErr *client.APIError
+			if errors.As(err, &apiErr) {
+				return err
+			}
+			if err := waitFor(ctx, reconnectDelay); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+			reconnectDelay = nextWorkbenchReconnectDelay(reconnectDelay)
+			continue
+		}
+
+		sawEvent := false
+		var streamErr error
+		for events != nil || errs != nil {
+			select {
+			case <-ctx.Done():
+				return nil
+			case event, ok := <-events:
+				if !ok {
+					events = nil
+					continue
+				}
+				if event.Revision <= after {
+					continue
+				}
+				if err := processor.AddRow(ctx, types.NewRow(
+					types.MRP("workbench_id", event.WorkbenchID),
+					types.MRP("revision", strconv.FormatUint(event.Revision, 10)),
+				)); err != nil {
+					return err
+				}
+				after = event.Revision
+				sawEvent = true
+			case err, ok := <-errs:
+				if !ok {
+					errs = nil
+					continue
+				}
+				if err != nil {
+					streamErr = err
+				}
+			}
+		}
+
+		if ctx.Err() != nil {
+			return nil
+		}
+		if streamErr != nil {
+			var readErr *client.StreamReadError
+			if !errors.As(streamErr, &readErr) {
+				return streamErr
+			}
+		}
+		if sawEvent {
+			reconnectDelay = workbenchReconnectInitial
+		}
+		if err := waitFor(ctx, reconnectDelay); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		reconnectDelay = nextWorkbenchReconnectDelay(reconnectDelay)
+	}
+}
+
+func waitForWorkbenchReconnect(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func nextWorkbenchReconnectDelay(current time.Duration) time.Duration {
+	if current >= workbenchReconnectMaximum/2 {
+		return workbenchReconnectMaximum
+	}
+	return current * 2
 }

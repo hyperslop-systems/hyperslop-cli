@@ -23,6 +23,7 @@ func TestExitOnMapsAPIStatusesWithoutExiting(t *testing.T) {
 		{http.StatusUnauthorized, ExitAuth}, {http.StatusForbidden, ExitAuth},
 		{http.StatusNotFound, ExitNotFound}, {http.StatusBadRequest, ExitValidation},
 		{http.StatusUnprocessableEntity, ExitValidation}, {http.StatusConflict, ExitValidation},
+		{http.StatusPreconditionFailed, ExitValidation},
 		{http.StatusRequestEntityTooLarge, ExitValidation}, {http.StatusInternalServerError, ExitError},
 	}
 	for _, tc := range cases {
