@@ -14,7 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestNewNormalizesBaseURL(t *testing.T) {
@@ -182,7 +182,7 @@ func TestPushSetsModeExplicitly(t *testing.T) {
 	var seen url.Values
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = r.URL.Query()
-		writeJSON(w, datadrop.AppendResult{ID: "x", Seq: 1})
+		writeJSON(w, datalab.AppendResult{ID: "x", Seq: 1})
 	}))
 	defer server.Close()
 
@@ -220,7 +220,7 @@ func TestPushDerivesDuplicateFromHTTPStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tc.status)
-				writeJSON(w, datadrop.AppendResult{ID: "event-1", Seq: 7})
+				writeJSON(w, datalab.AppendResult{ID: "event-1", Seq: 7})
 			}))
 			defer server.Close()
 
@@ -245,7 +245,7 @@ func TestDeleteDatasetVersionReturnsConcreteVersionForLatest(t *testing.T) {
 		if !strings.HasSuffix(r.URL.Path, "/versions/latest") {
 			t.Errorf("delete path = %q, want latest alias", r.URL.Path)
 		}
-		writeJSON(w, datadrop.DeleteDatasetVersionResult{
+		writeJSON(w, datalab.DeleteDatasetVersionResult{
 			Drop: "greenhouse", Dataset: "readings", Version: 7, Deleted: true,
 		})
 	}))
@@ -255,7 +255,7 @@ func TestDeleteDatasetVersionReturnsConcreteVersionForLatest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	deleted, err := c.DeleteDatasetVersion(context.Background(), "greenhouse", "readings", datadrop.LatestVersion)
+	deleted, err := c.DeleteDatasetVersion(context.Background(), "greenhouse", "readings", datalab.LatestVersion)
 	if err != nil {
 		t.Fatalf("DeleteDatasetVersion: %v", err)
 	}
@@ -267,9 +267,9 @@ func TestDeleteDatasetVersionReturnsConcreteVersionForLatest(t *testing.T) {
 // The default stream is omitted from the query string, so request URLs stay
 // readable for the common case.
 func TestQueryValuesOmitsDefaults(t *testing.T) {
-	values := queryValues(datadrop.EventQuery{
+	values := queryValues(datalab.EventQuery{
 		Drop:   "greenhouse",
-		Stream: datadrop.DefaultStream,
+		Stream: datalab.DefaultStream,
 	})
 	for _, key := range []string{"stream", "limit", "after", "before", "from", "to", "time_field"} {
 		if values.Has(key) {
@@ -282,7 +282,7 @@ func TestQueryValuesEncodesEverySet(t *testing.T) {
 	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)
 
-	values := queryValues(datadrop.EventQuery{
+	values := queryValues(datalab.EventQuery{
 		Drop:      "greenhouse",
 		Stream:    "alerts",
 		Limit:     25,
@@ -290,8 +290,8 @@ func TestQueryValuesEncodesEverySet(t *testing.T) {
 		Before:    0,
 		From:      from,
 		To:        to,
-		Order:     datadrop.OrderAsc,
-		TimeField: datadrop.TimeFieldReceivedAt,
+		Order:     datalab.OrderAsc,
+		TimeField: datalab.TimeFieldReceivedAt,
 	})
 
 	for key, want := range map[string]string{

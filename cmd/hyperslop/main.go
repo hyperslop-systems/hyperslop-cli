@@ -1,9 +1,9 @@
-// Command hyperslop is the agent/customer-facing CLI for the datadrop backend.
+// Command hyperslop is the agent/customer-facing CLI for the datalab backend.
 //
 // It is a thin client of the server's HTTP API: create/push/query/tail/export,
 // dataset publish/retrieve, schema put/show, the browser-approved device
 // pairing flow, and whoami. It is deliberately not the server — that is the
-// proprietary datadrop binary. The admin datadrop binary imports these same
+// proprietary datalab binary. The admin datalab binary imports these same
 // customer command groups from this module so the two never duplicate.
 //
 // See ttmp/2026/07/29/HYPERSLOP-1--*/design-doc/01-*.md for the extraction

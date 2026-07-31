@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestImportDatasetRejectsNegativeRowsBeforeRequest(t *testing.T) {
@@ -76,7 +76,7 @@ func TestPushDatasetMountsAStableSnapshotWhenSourceChanges(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/versions"):
-			_ = json.NewEncoder(w).Encode(datadrop.DatasetVersion{Version: 1})
+			_ = json.NewEncoder(w).Encode(datalab.DatasetVersion{Version: 1})
 		case r.Method == http.MethodHead:
 			// Mutate the original after the client has captured and hashed its
 			// snapshot but before it mounts the cache hit.
@@ -86,9 +86,9 @@ func TestPushDatasetMountsAStableSnapshotWhenSourceChanges(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		case r.Method == http.MethodPut:
 			mountedDigest = r.URL.Query().Get("digest")
-			_ = json.NewEncoder(w).Encode(datadrop.UploadFileResult{Digest: mountedDigest})
+			_ = json.NewEncoder(w).Encode(datalab.UploadFileResult{Digest: mountedDigest})
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/commit"):
-			_ = json.NewEncoder(w).Encode(datadrop.DatasetVersion{Version: 1})
+			_ = json.NewEncoder(w).Encode(datalab.DatasetVersion{Version: 1})
 		default:
 			http.NotFound(w, r)
 		}
@@ -100,7 +100,7 @@ func TestPushDatasetMountsAStableSnapshotWhenSourceChanges(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	result, err := api.PushDataset(context.Background(), "greenhouse", "readings",
-		[]PushFile{{LocalPath: localPath, LogicalPath: "reading.txt"}}, datadrop.CommitVersionRequest{})
+		[]PushFile{{LocalPath: localPath, LogicalPath: "reading.txt"}}, datalab.CommitVersionRequest{})
 	if err != nil {
 		t.Fatalf("PushDataset: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestDatasetUploadAndMountUseLogicalPathMediaType(t *testing.T) {
 	var mediaTypes []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mediaTypes = append(mediaTypes, r.Header.Get("Content-Type"))
-		_ = json.NewEncoder(w).Encode(datadrop.UploadFileResult{
+		_ = json.NewEncoder(w).Encode(datalab.UploadFileResult{
 			Path: "rows.csv", Digest: "sha256:test", SizeBytes: 4,
 		})
 	}))

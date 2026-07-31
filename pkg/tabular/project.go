@@ -7,21 +7,21 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // FromEvents projects a page of envelopes into a table.
 //
 // It takes an already-fetched page rather than a query because the store's
 // query path already owns ordering, time filters, cursors and the limit clamp
-// (pkg/datadrop/query.go). Re-implementing any of that here would be a second
+// (pkg/datalab/query.go). Re-implementing any of that here would be a second
 // answer to a question that already has one.
 //
 // Rows are returned in the order given. For a descending query that means
 // newest first, which is wrong for a line chart — and is corrected in the
 // browser, which sorts each line group along x anyway. Sorting in both places
 // is how a chart ends up correct for only one of the two orderings.
-func FromEvents(ref SourceRef, events []datadrop.Envelope) (Table, error) {
+func FromEvents(ref SourceRef, events []datalab.Envelope) (Table, error) {
 	b := newBuilder(ref, nil, EnvelopeColumns)
 
 	var highest int64

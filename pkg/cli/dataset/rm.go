@@ -22,7 +22,7 @@ type RmCommand struct {
 
 var _ cmds.GlazeCommand = &RmCommand{}
 
-// NewRmCommand builds `datadrop dataset rm DROP DATASET`.
+// NewRmCommand builds `datalab dataset rm DROP DATASET`.
 func NewRmCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {

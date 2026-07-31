@@ -13,7 +13,7 @@ import (
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 )
 
-// Register attaches `datadrop schema put` and `datadrop schema show`.
+// Register attaches `datalab schema put` and `datalab schema show`.
 func Register(root *cobra.Command) error {
 	group := &cobra.Command{
 		Use:   "schema",

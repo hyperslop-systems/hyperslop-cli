@@ -16,13 +16,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // ListDatasets returns the datasets in a drop.
-func (c *Client) ListDatasets(ctx context.Context, drop string) ([]datadrop.Dataset, error) {
+func (c *Client) ListDatasets(ctx context.Context, drop string) ([]datalab.Dataset, error) {
 	var response struct {
-		Datasets []datadrop.Dataset `json:"datasets"`
+		Datasets []datalab.Dataset `json:"datasets"`
 	}
 	err := c.doJSON(ctx, http.MethodGet,
 		"/v1/drops/"+url.PathEscape(drop)+"/datasets", nil, nil, &response)
@@ -30,18 +30,18 @@ func (c *Client) ListDatasets(ctx context.Context, drop string) ([]datadrop.Data
 }
 
 // GetDataset returns one dataset with its committed versions.
-func (c *Client) GetDataset(ctx context.Context, drop, dataset string) (datadrop.Dataset, error) {
-	var found datadrop.Dataset
+func (c *Client) GetDataset(ctx context.Context, drop, dataset string) (datalab.Dataset, error) {
+	var found datalab.Dataset
 	err := c.doJSON(ctx, http.MethodGet, c.datasetPath(drop, dataset), nil, nil, &found)
 	return found, err
 }
 
-// GetDatasetVersion returns one version. Pass datadrop.LatestVersion for the
+// GetDatasetVersion returns one version. Pass datalab.LatestVersion for the
 // highest committed one.
 func (c *Client) GetDatasetVersion(
 	ctx context.Context, drop, dataset, version string,
-) (datadrop.DatasetVersion, error) {
-	var found datadrop.DatasetVersion
+) (datalab.DatasetVersion, error) {
+	var found datalab.DatasetVersion
 	err := c.doJSON(ctx, http.MethodGet,
 		c.versionPath(drop, dataset, version), nil, nil, &found)
 	return found, err
@@ -50,8 +50,8 @@ func (c *Client) GetDatasetVersion(
 // OpenDatasetVersion opens a draft version.
 func (c *Client) OpenDatasetVersion(
 	ctx context.Context, drop, dataset string,
-) (datadrop.DatasetVersion, error) {
-	var version datadrop.DatasetVersion
+) (datalab.DatasetVersion, error) {
+	var version datalab.DatasetVersion
 	err := c.doJSON(ctx, http.MethodPost,
 		c.datasetPath(drop, dataset)+"/versions", nil, nil, &version)
 	return version, err
@@ -59,9 +59,9 @@ func (c *Client) OpenDatasetVersion(
 
 // CommitDatasetVersion seals a draft with a manifest and optional schema.
 func (c *Client) CommitDatasetVersion(
-	ctx context.Context, drop, dataset string, version int, req datadrop.CommitVersionRequest,
-) (datadrop.DatasetVersion, error) {
-	var committed datadrop.DatasetVersion
+	ctx context.Context, drop, dataset string, version int, req datalab.CommitVersionRequest,
+) (datalab.DatasetVersion, error) {
+	var committed datalab.DatasetVersion
 	err := c.doJSON(ctx, http.MethodPost,
 		c.versionPath(drop, dataset, strconv.Itoa(version))+"/commit", nil, req, &committed)
 	return committed, err
@@ -71,8 +71,8 @@ func (c *Client) CommitDatasetVersion(
 // server deleted. This matters when version is the "latest" alias.
 func (c *Client) DeleteDatasetVersion(
 	ctx context.Context, drop, dataset, version string,
-) (datadrop.DeleteDatasetVersionResult, error) {
-	var deleted datadrop.DeleteDatasetVersionResult
+) (datalab.DeleteDatasetVersionResult, error) {
+	var deleted datalab.DeleteDatasetVersionResult
 	err := c.doJSON(ctx, http.MethodDelete,
 		c.versionPath(drop, dataset, version), nil, nil, &deleted)
 	return deleted, err
@@ -103,16 +103,16 @@ func (c *Client) BlobExists(ctx context.Context, digest string) (bool, error) {
 func (c *Client) UploadDatasetFile(
 	ctx context.Context, drop, dataset string, version int,
 	logicalPath, localPath, digest string,
-) (datadrop.UploadFileResult, error) {
+) (datalab.UploadFileResult, error) {
 	file, err := os.Open(localPath)
 	if err != nil {
-		return datadrop.UploadFileResult{}, errors.Wrapf(err, "open %s", localPath)
+		return datalab.UploadFileResult{}, errors.Wrapf(err, "open %s", localPath)
 	}
 	defer func() { _ = file.Close() }()
 
 	info, err := file.Stat()
 	if err != nil {
-		return datadrop.UploadFileResult{}, errors.Wrapf(err, "stat %s", localPath)
+		return datalab.UploadFileResult{}, errors.Wrapf(err, "stat %s", localPath)
 	}
 
 	target := c.versionPath(drop, dataset, strconv.Itoa(version)) +
@@ -120,7 +120,7 @@ func (c *Client) UploadDatasetFile(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.BaseURL+target, file)
 	if err != nil {
-		return datadrop.UploadFileResult{}, errors.Wrap(err, "client: build upload request")
+		return datalab.UploadFileResult{}, errors.Wrap(err, "client: build upload request")
 	}
 	// Setting ContentLength lets the transport avoid chunked encoding, and lets
 	// the server's size cap reject an oversized upload before reading it.
@@ -139,13 +139,13 @@ func (c *Client) UploadDatasetFile(
 // transferring anything.
 func (c *Client) MountDatasetFile(
 	ctx context.Context, drop, dataset string, version int, logicalPath, digest string,
-) (datadrop.UploadFileResult, error) {
+) (datalab.UploadFileResult, error) {
 	target := c.versionPath(drop, dataset, strconv.Itoa(version)) +
 		"/files/" + escapePath(logicalPath) + "?digest=" + url.QueryEscape(digest)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.BaseURL+target, http.NoBody)
 	if err != nil {
-		return datadrop.UploadFileResult{}, errors.Wrap(err, "client: build mount request")
+		return datalab.UploadFileResult{}, errors.Wrap(err, "client: build mount request")
 	}
 	req.ContentLength = 0
 	if mediaType := mime.TypeByExtension(path.Ext(logicalPath)); mediaType != "" {
@@ -158,20 +158,20 @@ func (c *Client) MountDatasetFile(
 	return c.finishUpload(req)
 }
 
-func (c *Client) finishUpload(req *http.Request) (datadrop.UploadFileResult, error) {
+func (c *Client) finishUpload(req *http.Request) (datalab.UploadFileResult, error) {
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return datadrop.UploadFileResult{}, errors.Wrap(err, "client: upload")
+		return datalab.UploadFileResult{}, errors.Wrap(err, "client: upload")
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return datadrop.UploadFileResult{}, apiErrorFrom(resp)
+		return datalab.UploadFileResult{}, apiErrorFrom(resp)
 	}
 
-	var result datadrop.UploadFileResult
+	var result datalab.UploadFileResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return datadrop.UploadFileResult{}, errors.Wrap(err, "client: decode upload result")
+		return datalab.UploadFileResult{}, errors.Wrap(err, "client: decode upload result")
 	}
 	return result, nil
 }
@@ -208,7 +208,7 @@ type PushFile struct {
 
 // PushResult reports what a push transferred.
 type PushResult struct {
-	Version      datadrop.DatasetVersion
+	Version      datalab.DatasetVersion
 	Uploaded     int
 	Mounted      int
 	BytesSent    int64
@@ -223,7 +223,7 @@ type PushResult struct {
 // so a concurrent writer cannot make the digest describe one state while the
 // transfer or mount publishes another.
 func (c *Client) PushDataset(
-	ctx context.Context, drop, dataset string, files []PushFile, req datadrop.CommitVersionRequest,
+	ctx context.Context, drop, dataset string, files []PushFile, req datalab.CommitVersionRequest,
 ) (PushResult, error) {
 	if len(files) == 0 {
 		return PushResult{}, errors.New("client: at least one file is required")
@@ -415,13 +415,13 @@ func apiErrorFrom(resp *http.Response) error {
 func (c *Client) ImportDataset(
 	ctx context.Context, drop, dataset, version, logicalPath, stream, format string,
 	maxRows int, strict bool,
-) (datadrop.ImportResult, error) {
+) (datalab.ImportResult, error) {
 	if maxRows < 0 {
-		return datadrop.ImportResult{}, errors.Errorf("client: max rows must not be negative, got %d", maxRows)
+		return datalab.ImportResult{}, errors.Errorf("client: max rows must not be negative, got %d", maxRows)
 	}
 	query := url.Values{}
 	query.Set("path", logicalPath)
-	if stream != "" && stream != datadrop.DefaultStream {
+	if stream != "" && stream != datalab.DefaultStream {
 		query.Set("stream", stream)
 	}
 	if format != "" {
@@ -434,7 +434,7 @@ func (c *Client) ImportDataset(
 		query.Set("strict", "true")
 	}
 
-	var result datadrop.ImportResult
+	var result datalab.ImportResult
 	err := c.doJSON(ctx, http.MethodPost,
 		c.versionPath(drop, dataset, version)+"/import", query, nil, &result)
 	return result, err

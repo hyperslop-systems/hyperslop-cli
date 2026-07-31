@@ -18,7 +18,7 @@ import (
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 )
 
@@ -37,7 +37,7 @@ type PushCommand struct {
 
 var _ cmds.GlazeCommand = &PushCommand{}
 
-// NewPushCommand builds `datadrop dataset push DROP DATASET`.
+// NewPushCommand builds `datalab dataset push DROP DATASET`.
 func NewPushCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {
@@ -174,7 +174,7 @@ func resolvePushFiles(files []string, flatten bool) ([]client.PushFile, error) {
 		logical = filepath.ToSlash(filepath.Clean(logical))
 		logical = strings.TrimPrefix(logical, "./")
 
-		if err := datadrop.ValidateDatasetPath(logical); err != nil {
+		if err := datalab.ValidateDatasetPath(logical); err != nil {
 			return nil, errors.Wrapf(err, "--file %q", entry)
 		}
 		if info, err := os.Stat(local); err != nil {
@@ -214,16 +214,16 @@ func splitPushFileEntry(entry string) (string, string) {
 //
 // The flags win over the document, so a scripted manifest can be overridden on
 // the command line without editing the file.
-func buildCommitRequest(s *pushSettings) (datadrop.CommitVersionRequest, error) {
+func buildCommitRequest(s *pushSettings) (datalab.CommitVersionRequest, error) {
 	manifest := map[string]any{}
 
 	if s.Manifest != "" {
 		raw, err := ddcli.ReadSpec(s.Manifest)
 		if err != nil {
-			return datadrop.CommitVersionRequest{}, err
+			return datalab.CommitVersionRequest{}, err
 		}
 		if err := jsondoc.Decode(raw, &manifest); err != nil {
-			return datadrop.CommitVersionRequest{}, errors.Wrapf(err, "manifest %s", s.Manifest)
+			return datalab.CommitVersionRequest{}, errors.Wrapf(err, "manifest %s", s.Manifest)
 		}
 		// JSON null is a valid absent manifest (matching ParseManifest). It
 		// decodes a map to nil, so restore an object before applying CLI
@@ -241,11 +241,11 @@ func buildCommitRequest(s *pushSettings) (datadrop.CommitVersionRequest, error) 
 		}
 	}
 
-	req := datadrop.CommitVersionRequest{}
+	req := datalab.CommitVersionRequest{}
 	if len(manifest) > 0 {
 		encoded, err := json.Marshal(manifest)
 		if err != nil {
-			return datadrop.CommitVersionRequest{}, errors.Wrap(err, "encode manifest")
+			return datalab.CommitVersionRequest{}, errors.Wrap(err, "encode manifest")
 		}
 		req.Manifest = encoded
 	}
@@ -253,10 +253,10 @@ func buildCommitRequest(s *pushSettings) (datadrop.CommitVersionRequest, error) 
 	if s.Schema != "" {
 		spec, err := ddcli.ReadSpec(s.Schema)
 		if err != nil {
-			return datadrop.CommitVersionRequest{}, err
+			return datalab.CommitVersionRequest{}, err
 		}
 		if len(strings.TrimSpace(string(spec))) == 0 {
-			return datadrop.CommitVersionRequest{}, errors.Errorf("schema %s is empty", s.Schema)
+			return datalab.CommitVersionRequest{}, errors.Errorf("schema %s is empty", s.Schema)
 		}
 		req.Schema = spec
 	}

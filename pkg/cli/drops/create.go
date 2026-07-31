@@ -14,7 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // CreateCommand creates a drop.
@@ -24,7 +24,7 @@ type CreateCommand struct {
 
 var _ cmds.GlazeCommand = &CreateCommand{}
 
-// NewCreateCommand builds `datadrop create NAME`.
+// NewCreateCommand builds `datalab create NAME`.
 func NewCreateCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {
@@ -88,7 +88,7 @@ func (c *CreateCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	created, err := api.CreateDrop(ctx, datadrop.CreateDropRequest{
+	created, err := api.CreateDrop(ctx, datalab.CreateDropRequest{
 		Name:       s.Name,
 		Retention:  s.Retention,
 		PublicRead: s.PublicRead,

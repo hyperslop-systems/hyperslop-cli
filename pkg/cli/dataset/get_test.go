@@ -20,7 +20,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestGetSettingsRejectsArchiveAndFileTogether(t *testing.T) {
@@ -251,9 +251,9 @@ func TestDownloadArchiveVerifiesEntriesBeforePublication(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/v1/drops/greenhouse/datasets/readings/versions/latest":
-					_ = json.NewEncoder(w).Encode(datadrop.DatasetVersion{
+					_ = json.NewEncoder(w).Encode(datalab.DatasetVersion{
 						Drop: "greenhouse", Dataset: "readings", Version: 7,
-						Files: []datadrop.DatasetFile{{
+						Files: []datalab.DatasetFile{{
 							Path: logicalPath, Digest: digestString(expected), SizeBytes: int64(len(expected)),
 						}},
 					})
@@ -275,7 +275,7 @@ func TestDownloadArchiveVerifiesEntriesBeforePublication(t *testing.T) {
 				t.Fatalf("WriteFile: %v", err)
 			}
 			err = downloadArchive(context.Background(), api, &getSettings{
-				Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion,
+				Drop: "greenhouse", Dataset: "readings", Version: datalab.LatestVersion,
 				Archive: true, Output: target, Force: true,
 			})
 			if tc.wantError {
@@ -338,9 +338,9 @@ func TestDownloadSingleFileVerifiesResolvedVersionBeforePublication(t *testing.T
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/drops/greenhouse/datasets/readings/versions/latest":
-			_ = json.NewEncoder(w).Encode(datadrop.DatasetVersion{
+			_ = json.NewEncoder(w).Encode(datalab.DatasetVersion{
 				Drop: "greenhouse", Dataset: "readings", Version: 7,
-				Files: []datadrop.DatasetFile{{
+				Files: []datalab.DatasetFile{{
 					Path: "data/readings.csv", Digest: digestString(content), SizeBytes: int64(len(content)),
 				}},
 			})
@@ -359,7 +359,7 @@ func TestDownloadSingleFileVerifiesResolvedVersionBeforePublication(t *testing.T
 	}
 	target := filepath.Join(t.TempDir(), "readings.csv")
 	err = downloadSingleFile(context.Background(), api, &getSettings{
-		Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion,
+		Drop: "greenhouse", Dataset: "readings", Version: datalab.LatestVersion,
 		File: "data/readings.csv", Output: target,
 	})
 	if err != nil {
@@ -378,9 +378,9 @@ func TestDownloadVersionForceDoesNotMixVersionsOnLaterFailure(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/drops/greenhouse/datasets/readings/versions/latest" {
-			version := datadrop.DatasetVersion{Drop: "greenhouse", Dataset: "readings", Version: 7}
+			version := datalab.DatasetVersion{Drop: "greenhouse", Dataset: "readings", Version: 7}
 			for logicalPath, content := range files {
-				version.Files = append(version.Files, datadrop.DatasetFile{
+				version.Files = append(version.Files, datalab.DatasetFile{
 					Path: logicalPath, Digest: digestString(content), SizeBytes: int64(len(content)),
 				})
 			}
@@ -413,7 +413,7 @@ func TestDownloadVersionForceDoesNotMixVersionsOnLaterFailure(t *testing.T) {
 		}
 	}
 	err = downloadVersion(context.Background(), api, &getSettings{
-		Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion,
+		Drop: "greenhouse", Dataset: "readings", Version: datalab.LatestVersion,
 		Output: output, Force: true,
 	})
 	if err == nil || !strings.Contains(err.Error(), "integrity check failed") {
@@ -432,9 +432,9 @@ func TestDownloadVersionPinsAllFilesToResolvedVersion(t *testing.T) {
 	var fileRequests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/drops/greenhouse/datasets/readings/versions/latest" {
-			version := datadrop.DatasetVersion{Drop: "greenhouse", Dataset: "readings", Version: 7}
+			version := datalab.DatasetVersion{Drop: "greenhouse", Dataset: "readings", Version: 7}
 			for logicalPath, content := range files {
-				version.Files = append(version.Files, datadrop.DatasetFile{
+				version.Files = append(version.Files, datalab.DatasetFile{
 					Path: logicalPath, Digest: digestString(content), SizeBytes: int64(len(content)),
 				})
 			}
@@ -464,7 +464,7 @@ func TestDownloadVersionPinsAllFilesToResolvedVersion(t *testing.T) {
 	}
 	output := t.TempDir()
 	err = downloadVersion(context.Background(), api, &getSettings{
-		Drop: "greenhouse", Dataset: "readings", Version: datadrop.LatestVersion, Output: output,
+		Drop: "greenhouse", Dataset: "readings", Version: datalab.LatestVersion, Output: output,
 	})
 	if err != nil {
 		t.Fatalf("downloadVersion: %v", err)

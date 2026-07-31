@@ -15,7 +15,7 @@ import (
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 )
 
-// Register attaches the `datadrop dataset` group.
+// Register attaches the `datalab dataset` group.
 func Register(root *cobra.Command) error {
 	group := &cobra.Command{
 		Use:   "dataset",

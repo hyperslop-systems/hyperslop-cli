@@ -8,14 +8,14 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/tabular"
 )
 
 // The row shape is a public API (DR-79).
 //
-// The moment `datadrop query --output-fields seq,time,data.temp_c` works, those names
+// The moment `datalab query --output-fields seq,time,data.temp_c` works, those names
 // are something scripts depend on, and renaming one is a breaking change no
 // compiler catches. So every response type gets exactly one projection
 // function, they all live here, and rows_test.go pins the exact key set of
@@ -27,7 +27,7 @@ import (
 //   - Key names are the API's JSON names. `created_at`, not `created`;
 //     `received_at`, not `received`. A caller who has read the HTTP API knows
 //     the column names without being told twice.
-//   - Timestamps are rendered with datadrop.FormatTime, the canonical
+//   - Timestamps are rendered with datalab.FormatTime, the canonical
 //     fixed-width UTC RFC3339 the store, the CSV export and the table
 //     projection already agree on.
 
@@ -37,14 +37,14 @@ import (
 // The flattening is not implemented here. It is tabular.FromEvents — the same
 // projection the server's /table endpoint returns and therefore the same column
 // names the web workbench puts on its field chips (DR-83). If the CLI invented
-// its own flattener, `datadrop query --output-fields data.temp_c` and the column the
+// its own flattener, `datalab query --output-fields data.temp_c` and the column the
 // workbench names would be two different things that happen to look alike.
 //
 // Projecting the whole page in one call rather than event by event matters:
 // tabular resolves the column set over the whole sample, so every returned row
 // carries the same keys in the same order even when one event's payload is
 // missing a field another one has.
-func RowsForEnvelopes(events []datadrop.Envelope) ([]types.Row, error) {
+func RowsForEnvelopes(events []datalab.Envelope) ([]types.Row, error) {
 	table, err := tabular.FromEvents(tabular.SourceRef{Kind: tabular.KindStream}, events)
 	if err != nil {
 		return nil, errors.Wrap(err, "projecting events")
@@ -75,8 +75,8 @@ func RowsForEnvelopes(events []datadrop.Envelope) ([]types.Row, error) {
 
 // RowForEnvelope projects one event, for the streaming path where events arrive
 // one at a time and there is no page to resolve columns over.
-func RowForEnvelope(event datadrop.Envelope) (types.Row, error) {
-	rows, err := RowsForEnvelopes([]datadrop.Envelope{event})
+func RowForEnvelope(event datalab.Envelope) (types.Row, error) {
+	rows, err := RowsForEnvelopes([]datalab.Envelope{event})
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +87,10 @@ func RowForEnvelope(event datadrop.Envelope) (types.Row, error) {
 }
 
 // RowForDrop projects a drop listing entry.
-func RowForDrop(d datadrop.Drop) types.Row {
+func RowForDrop(d datalab.Drop) types.Row {
 	return types.NewRow(
 		types.MRP("name", d.Name),
-		types.MRP("created_at", datadrop.FormatTime(d.CreatedAt)),
+		types.MRP("created_at", datalab.FormatTime(d.CreatedAt)),
 		types.MRP("retention", d.Retention),
 		types.MRP("public_read", d.PublicRead),
 		types.MRP("owner_id", d.OwnerID),
@@ -101,9 +101,9 @@ func RowForDrop(d datadrop.Drop) types.Row {
 // RowForDropStats projects the inspection view: a drop plus its counters.
 //
 // It is a superset of RowForDrop and starts with the same keys in the same
-// order, so `datadrop list --output-fields name,retention` and
-// `datadrop inspect X --output-fields name,retention` name the same things.
-func RowForDropStats(s datadrop.DropStats) types.Row {
+// order, so `datalab list --output-fields name,retention` and
+// `datalab inspect X --output-fields name,retention` name the same things.
+func RowForDropStats(s datalab.DropStats) types.Row {
 	row := RowForDrop(s.Drop)
 	row.Set("event_count", s.EventCount)
 	row.Set("last_seq", s.LastSeq)
@@ -113,32 +113,32 @@ func RowForDropStats(s datadrop.DropStats) types.Row {
 }
 
 // RowForAppendResult projects what the ingest endpoint returned for one event.
-func RowForAppendResult(r datadrop.AppendResult) types.Row {
+func RowForAppendResult(r datalab.AppendResult) types.Row {
 	return types.NewRow(
 		types.MRP("id", r.ID),
 		types.MRP("drop", r.Drop),
 		types.MRP("stream", r.Stream),
 		types.MRP("seq", r.Seq),
-		types.MRP("received_at", datadrop.FormatTime(r.ReceivedAt)),
+		types.MRP("received_at", datalab.FormatTime(r.ReceivedAt)),
 		types.MRP("duplicate", r.Duplicate),
 		types.MRP("warnings", len(r.Warnings)),
 	)
 }
 
 // RowForSchema projects a stored schema version.
-func RowForSchema(s datadrop.Schema) types.Row {
+func RowForSchema(s datalab.Schema) types.Row {
 	return types.NewRow(
 		types.MRP("drop", s.Drop),
 		types.MRP("stream", s.Stream),
 		types.MRP("version", s.Version),
 		types.MRP("mode", string(s.Mode)),
-		types.MRP("created_at", datadrop.FormatTime(s.CreatedAt)),
+		types.MRP("created_at", datalab.FormatTime(s.CreatedAt)),
 		types.MRP("spec", decodeJSON(s.Spec)),
 	)
 }
 
 // RowForPutSchemaResult projects the response to registering a schema version.
-func RowForPutSchemaResult(r datadrop.PutSchemaResult) types.Row {
+func RowForPutSchemaResult(r datalab.PutSchemaResult) types.Row {
 	return types.NewRow(
 		types.MRP("drop", r.Drop),
 		types.MRP("stream", r.Stream),
@@ -152,11 +152,11 @@ func RowForPutSchemaResult(r datadrop.PutSchemaResult) types.Row {
 // The latest_* columns summarize the newest version, because "how big is this
 // dataset now" is the question a listing answers and reaching for it otherwise
 // costs a second call. ListDatasetVersions returns newest first.
-func RowForDataset(d datadrop.Dataset) types.Row {
+func RowForDataset(d datalab.Dataset) types.Row {
 	row := types.NewRow(
 		types.MRP("drop", d.Drop),
 		types.MRP("name", d.Name),
-		types.MRP("created_at", datadrop.FormatTime(d.CreatedAt)),
+		types.MRP("created_at", datalab.FormatTime(d.CreatedAt)),
 		types.MRP("versions", len(d.Versions)),
 	)
 
@@ -173,7 +173,7 @@ func RowForDataset(d datadrop.Dataset) types.Row {
 }
 
 // RowForDatasetVersion projects one immutable dataset version.
-func RowForDatasetVersion(v datadrop.DatasetVersion) types.Row {
+func RowForDatasetVersion(v datalab.DatasetVersion) types.Row {
 	return types.NewRow(
 		types.MRP("drop", v.Drop),
 		types.MRP("dataset", v.Dataset),
@@ -181,7 +181,7 @@ func RowForDatasetVersion(v datadrop.DatasetVersion) types.Row {
 		types.MRP("state", string(v.State)),
 		types.MRP("file_count", v.FileCount),
 		types.MRP("total_bytes", v.TotalBytes),
-		types.MRP("created_at", datadrop.FormatTime(v.CreatedAt)),
+		types.MRP("created_at", datalab.FormatTime(v.CreatedAt)),
 		types.MRP("committed_at", formatOptionalTime(v.CommittedAt)),
 		types.MRP("manifest", decodeJSON(v.Manifest)),
 	)
@@ -190,9 +190,9 @@ func RowForDatasetVersion(v datadrop.DatasetVersion) types.Row {
 // RowForDeletedVersion projects the result of deleting a dataset version.
 //
 // A write verb that says what it wrote is composable; one that prints a
-// sentence is not. `datadrop dataset rm ... --format jsonl --output-fields version` is the reason
+// sentence is not. `datalab dataset rm ... --format jsonl --output-fields version` is the reason
 // this returns a row rather than a line of prose.
-func RowForDeletedVersion(r datadrop.DeleteDatasetVersionResult) types.Row {
+func RowForDeletedVersion(r datalab.DeleteDatasetVersionResult) types.Row {
 	return types.NewRow(
 		types.MRP("drop", r.Drop),
 		types.MRP("dataset", r.Dataset),
@@ -202,7 +202,7 @@ func RowForDeletedVersion(r datadrop.DeleteDatasetVersionResult) types.Row {
 }
 
 // RowForImportResult projects a materialization run.
-func RowForImportResult(r datadrop.ImportResult) types.Row {
+func RowForImportResult(r datalab.ImportResult) types.Row {
 	return types.NewRow(
 		types.MRP("drop", r.Drop),
 		types.MRP("dataset", r.Dataset),
@@ -264,7 +264,7 @@ func formatOptionalTime(t *time.Time) string {
 	if t == nil {
 		return ""
 	}
-	return datadrop.FormatTime(*t)
+	return datalab.FormatTime(*t)
 }
 
 // decodeJSON turns a stored JSON document into something a formatter can

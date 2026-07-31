@@ -21,7 +21,7 @@ type ShowCommand struct {
 
 var _ cmds.GlazeCommand = &ShowCommand{}
 
-// NewShowCommand builds `datadrop dataset show DROP DATASET`.
+// NewShowCommand builds `datalab dataset show DROP DATASET`.
 //
 // Without --version it emits one row per version of the dataset, which is what
 // makes `--sort-by -version` and `--output-fields version,file_count,total_bytes`

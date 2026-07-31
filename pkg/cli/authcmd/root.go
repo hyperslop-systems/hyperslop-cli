@@ -1,4 +1,4 @@
-// Package authcmd registers commands that establish a local Datadrop
+// Package authcmd registers commands that establish a local Datalab
 // credential without accepting an upstream OIDC bearer token.
 package authcmd
 
@@ -10,15 +10,15 @@ import (
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 )
 
-// Register attaches the `datadrop auth` command group.
+// Register attaches the `datalab auth` command group.
 func Register(root *cobra.Command) error {
 	group := &cobra.Command{
 		Use:   "auth",
-		Short: "Establish local Datadrop credentials",
+		Short: "Establish local Datalab credentials",
 		Long: strings.TrimSpace(`
-Authentication commands establish local Datadrop credentials.
+Authentication commands establish local Datalab credentials.
 
-They never accept a ZITADEL/OIDC access token as a Datadrop data-plane
+They never accept a ZITADEL/OIDC access token as a Datalab data-plane
 credential. Browser sign-in creates a local dd_session; device pairing creates
 a scoped, revocable local ddp_ token after browser approval.
 `),

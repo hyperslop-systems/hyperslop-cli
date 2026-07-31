@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestCSVValueTyping(t *testing.T) {
@@ -620,9 +620,9 @@ func TestFromRowsRejectsANonArrayJSONDocument(t *testing.T) {
 
 func TestFromEventsColumnOrderAndTypes(t *testing.T) {
 	at := time.Date(2026, 7, 24, 15, 4, 5, 0, time.UTC)
-	events := []datadrop.Envelope{
+	events := []datalab.Envelope{
 		{
-			SpecVersion: datadrop.SpecVersion,
+			SpecVersion: datalab.SpecVersion,
 			ID:          "01J",
 			Drop:        "lab",
 			Stream:      "temps",
@@ -714,7 +714,7 @@ func TestFromEventsWithNoEvents(t *testing.T) {
 // render them, so the browser sees one format rather than three.
 func TestFromEventsUsesTheCanonicalTimeFormat(t *testing.T) {
 	at := time.Date(2026, 7, 24, 15, 4, 5, 100_000_000, time.UTC)
-	table, err := FromEvents(SourceRef{}, []datadrop.Envelope{{ID: "x", Time: at, ReceivedAt: at}})
+	table, err := FromEvents(SourceRef{}, []datalab.Envelope{{ID: "x", Time: at, ReceivedAt: at}})
 	if err != nil {
 		t.Fatalf("FromEvents: %v", err)
 	}
