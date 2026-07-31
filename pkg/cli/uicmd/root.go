@@ -30,6 +30,7 @@ request ID for safe retries.
 		NewReplaceCommand,
 		NewMutateCommand,
 		NewDeleteCommand,
+		NewStreamCommand,
 	); err != nil {
 		return err
 	}

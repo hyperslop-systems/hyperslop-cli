@@ -23,7 +23,9 @@ func TestRegisterExposesWorkbenchVerbsAndOutputFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find ui: %v", err)
 	}
-	for _, name := range []string{"list", "get", "create", "replace", "mutate", "delete"} {
+	for _, name := range []string{
+		"list", "get", "create", "replace", "mutate", "delete", "stream",
+	} {
 		command, _, err := ui.Find([]string{name})
 		if err != nil || command == ui {
 			t.Errorf("ui %s is not registered: %v", name, err)
@@ -97,6 +99,59 @@ func TestListCommandEmitsStructuredWorkbenchRows(t *testing.T) {
 	}
 }
 
+func TestStreamCommandEmitsStructuredRevisionRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/workbenches/bench-1/stream" || r.URL.Query().Get("after") != "7" {
+			t.Errorf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		if r.Header.Get("Authorization") != "Bearer command-token" {
+			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		data, err := workbenchapi.Marshal(&workbenchv1.WorkbenchUpdatedEvent{
+			WorkbenchId: "bench-1", Revision: 8,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "event: workbench.updated\nid: 8\ndata: "+string(data)+"\n\n")
+	}))
+	defer server.Close()
+
+	root := &cobra.Command{Use: "hyperslop", SilenceUsage: true, SilenceErrors: true}
+	if err := Register(root); err != nil {
+		t.Fatal(err)
+	}
+	root.SetArgs([]string{
+		"ui", "stream", "bench-1",
+		"--after", "7",
+		"--addr", server.URL,
+		"--token", "command-token",
+	})
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stdout
+	os.Stdout = write
+	executeErr := root.Execute()
+	_ = write.Close()
+	os.Stdout = previous
+	output, readErr := io.ReadAll(read)
+	_ = read.Close()
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if executeErr != nil {
+		t.Fatalf("Execute: %v\n%s", executeErr, output)
+	}
+	for _, expected := range []string{`"workbench_id":"bench-1"`, `"revision":"8"`} {
+		if !strings.Contains(string(output), expected) {
+			t.Errorf("output %q does not contain %q", output, expected)
+		}
+	}
+}
+
 func TestRevisionRejectsZeroAndNonNumericValues(t *testing.T) {
 	for _, value := range []string{"", "0", "-1", "abc"} {
 		if _, err := parseRevision(value); err == nil {
@@ -105,5 +160,18 @@ func TestRevisionRejectsZeroAndNonNumericValues(t *testing.T) {
 	}
 	if got, err := parseRevision("18446744073709551615"); err != nil || got != ^uint64(0) {
 		t.Fatalf("maximum uint64 = %d, %v", got, err)
+	}
+}
+
+func TestStreamAfterAcceptsZeroAndMaximumUint64(t *testing.T) {
+	for _, value := range []string{"0", "18446744073709551615"} {
+		if _, err := parseAfterRevision(value); err != nil {
+			t.Errorf("parseAfterRevision(%q): %v", value, err)
+		}
+	}
+	for _, value := range []string{"", "-1", "abc", "18446744073709551616"} {
+		if _, err := parseAfterRevision(value); err == nil {
+			t.Errorf("parseAfterRevision(%q) succeeded", value)
+		}
 	}
 }
