@@ -187,3 +187,8 @@ Release credential bootstrap: stored the Hyperslop Fury upload token directly at
 
 - /home/manuel/workspaces/2026-07-29/split-cli/hyperslop-cli/ttmp/2026/07/29/HYPERSLOP-1--extract-customer-facing-cli-from-go-go-datadrop-into-hyperslop-cli/reference/02-implementation-diary.md — Phase 9 credential-bootstrap record
 
+
+
+## 2026-07-31
+
+Rename-PR review remediation (hyperslop-cli 195f66d, datalab fe72495): DefaultType and the other persisted/wire strings revert to datadrop; the no-cycle guard and smoke-test companion lookup now point at github.com/hyperslop-systems/datalab; getting-a-token topic names the datalab admin binary; datalab repins hyperslop-cli. Diary Step 17.

@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // ExportCommand streams the server's canonical export.
@@ -27,10 +27,10 @@ import (
 //
 // Turning it into rows would fetch NDJSON, parse it, and re-serialise it as CSV
 // on the client. That moves the export format definition from one place to two,
-// so `curl …/export?format=csv` and `datadrop export --format csv` can
+// so `curl …/export?format=csv` and `datalab export --format csv` can
 // disagree; it loses streaming, because io.Copy is constant-memory over a 400 MB
 // export and a table formatter buffers every row to compute column widths; and
-// it gains nothing a caller wants, since someone running `datadrop export` is
+// it gains nothing a caller wants, since someone running `datalab export` is
 // asking for the server's canonical export rather than for a client-side view
 // of it.
 type ExportCommand struct {
@@ -39,7 +39,7 @@ type ExportCommand struct {
 
 var _ cmds.WriterCommand = &ExportCommand{}
 
-// NewExportCommand builds `datadrop export DROP`.
+// NewExportCommand builds `datalab export DROP`.
 func NewExportCommand() (cmds.Command, error) {
 	clientSection, err := ddcli.NewClientSection()
 	if err != nil {
@@ -71,7 +71,7 @@ envelope, or when the export is large enough that buffering it would matter.
 				fields.WithIsArgument(true),
 				fields.WithHelp("the drop to export")),
 		),
-		cmds.WithFlags(append(rangeFieldsWithOrder(datadrop.MaxLimit, string(datadrop.OrderAsc)),
+		cmds.WithFlags(append(rangeFieldsWithOrder(datalab.MaxLimit, string(datalab.OrderAsc)),
 			fields.New("format", fields.TypeChoice,
 				fields.WithChoices("csv", "ndjson", "json"),
 				fields.WithDefault("ndjson"),

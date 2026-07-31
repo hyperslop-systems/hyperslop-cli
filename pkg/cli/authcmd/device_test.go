@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestPrepareCredentialDestinationCreatesParentsBeforeWriting(t *testing.T) {
@@ -72,7 +72,7 @@ func TestPollRetriesRateLimitedResponseAfterRetryAfter(t *testing.T) {
 			})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(datadrop.DeviceTokenResponse{Token: "ddp_test_secret", TokenID: "tok_test"})
+		_ = json.NewEncoder(w).Encode(datalab.DeviceTokenResponse{Token: "ddp_test_secret", TokenID: "tok_test"})
 	}))
 	defer server.Close()
 
@@ -83,7 +83,7 @@ func TestPollRetriesRateLimitedResponseAfterRetryAfter(t *testing.T) {
 
 	var waits []time.Duration
 	token, err := pollWithWait(context.Background(), api,
-		datadrop.StartDeviceAuthorizationResponse{DeviceCode: "device-code", Interval: 5},
+		datalab.StartDeviceAuthorizationResponse{DeviceCode: "device-code", Interval: 5},
 		func(_ context.Context, d time.Duration) error {
 			waits = append(waits, d)
 			return nil

@@ -10,10 +10,10 @@ import (
 	"github.com/go-go-golems/glazed/pkg/types"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
-// The row shapes are a public API (DR-79). `datadrop query --output-fields seq` makes
+// The row shapes are a public API (DR-79). `datalab query --output-fields seq` makes
 // those names something scripts depend on, and renaming one is a breaking
 // change that no compiler catches — so it is caught here instead.
 //
@@ -42,15 +42,15 @@ func assertKeys(t *testing.T, what string, row types.Row, want []string) {
 }
 
 func TestRowForDropKeys(t *testing.T) {
-	row := RowForDrop(datadrop.Drop{Name: "greenhouse"})
+	row := RowForDrop(datalab.Drop{Name: "greenhouse"})
 	assertKeys(t, "RowForDrop", row, []string{
 		"name", "created_at", "retention", "public_read", "owner_id", "your_role",
 	})
 }
 
 func TestRowForDropStatsKeys(t *testing.T) {
-	row := RowForDropStats(datadrop.DropStats{
-		Drop:    datadrop.Drop{Name: "greenhouse"},
+	row := RowForDropStats(datalab.DropStats{
+		Drop:    datalab.Drop{Name: "greenhouse"},
 		Streams: []string{"events"},
 	})
 	// The drop keys come first, in the same order RowForDrop emits them, so
@@ -63,7 +63,7 @@ func TestRowForDropStatsKeys(t *testing.T) {
 }
 
 func TestRowForEnvelopeKeys(t *testing.T) {
-	event := datadrop.Envelope{
+	event := datalab.Envelope{
 		ID:     "01J0",
 		Drop:   "greenhouse",
 		Stream: "events",
@@ -88,10 +88,10 @@ func TestRowForEnvelopeKeys(t *testing.T) {
 }
 
 // An event with no payload contributes no data columns at all, which is what
-// makes `datadrop query --format csv` on an empty-payload stream produce a
+// makes `datalab query --format csv` on an empty-payload stream produce a
 // header rather than one column named "data".
 func TestRowForEnvelopeWithoutPayload(t *testing.T) {
-	row, err := RowForEnvelope(datadrop.Envelope{ID: "01J0"})
+	row, err := RowForEnvelope(datalab.Envelope{ID: "01J0"})
 	if err != nil {
 		t.Fatalf("RowForEnvelope: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestRowForEnvelopeWithoutPayload(t *testing.T) {
 // meta is absent from the table projection because a chart has no use for it,
 // and present here because it is the provenance record of an imported event.
 func TestRowForEnvelopeCarriesMeta(t *testing.T) {
-	row, err := RowForEnvelope(datadrop.Envelope{
+	row, err := RowForEnvelope(datalab.Envelope{
 		ID:   "01J0",
 		Meta: json.RawMessage(`{"dataset":"readings","row":1}`),
 	})
@@ -147,7 +147,7 @@ func TestDecodeJSONPreservesExactNumbers(t *testing.T) {
 }
 
 func TestRowsForEnvelopesShareColumns(t *testing.T) {
-	rows, err := RowsForEnvelopes([]datadrop.Envelope{
+	rows, err := RowsForEnvelopes([]datalab.Envelope{
 		{ID: "a", Data: json.RawMessage(`{"temp_c":21.7}`)},
 		{ID: "b", Data: json.RawMessage(`{"temp_c":21.9,"humidity":0.48}`)},
 	})
@@ -172,30 +172,30 @@ func TestRowsForEnvelopesShareColumns(t *testing.T) {
 }
 
 func TestRowForAppendResultKeys(t *testing.T) {
-	row := RowForAppendResult(datadrop.AppendResult{ID: "01J0", Seq: 3})
+	row := RowForAppendResult(datalab.AppendResult{ID: "01J0", Seq: 3})
 	assertKeys(t, "RowForAppendResult", row, []string{
 		"id", "drop", "stream", "seq", "received_at", "duplicate", "warnings",
 	})
 }
 
 func TestRowForSchemaKeys(t *testing.T) {
-	row := RowForSchema(datadrop.Schema{Drop: "greenhouse", Spec: json.RawMessage(`{}`)})
+	row := RowForSchema(datalab.Schema{Drop: "greenhouse", Spec: json.RawMessage(`{}`)})
 	assertKeys(t, "RowForSchema", row, []string{
 		"drop", "stream", "version", "mode", "created_at", "spec",
 	})
 }
 
 func TestRowForPutSchemaResultKeys(t *testing.T) {
-	row := RowForPutSchemaResult(datadrop.PutSchemaResult{Drop: "greenhouse", Version: 1})
+	row := RowForPutSchemaResult(datalab.PutSchemaResult{Drop: "greenhouse", Version: 1})
 	assertKeys(t, "RowForPutSchemaResult", row, []string{
 		"drop", "stream", "version", "mode",
 	})
 }
 
 func TestRowForDatasetKeys(t *testing.T) {
-	row := RowForDataset(datadrop.Dataset{
+	row := RowForDataset(datalab.Dataset{
 		Drop: "greenhouse", Name: "readings-2026",
-		Versions: []datadrop.DatasetVersion{{Version: 3, FileCount: 4, TotalBytes: 900}},
+		Versions: []datalab.DatasetVersion{{Version: 3, FileCount: 4, TotalBytes: 900}},
 	})
 	assertKeys(t, "RowForDataset", row, []string{
 		"drop", "name", "created_at", "versions",
@@ -210,7 +210,7 @@ func TestRowForDatasetKeys(t *testing.T) {
 }
 
 func TestRowForDatasetVersionKeys(t *testing.T) {
-	row := RowForDatasetVersion(datadrop.DatasetVersion{Drop: "greenhouse", Version: 1})
+	row := RowForDatasetVersion(datalab.DatasetVersion{Drop: "greenhouse", Version: 1})
 	assertKeys(t, "RowForDatasetVersion", row, []string{
 		"drop", "dataset", "version", "state", "file_count", "total_bytes",
 		"created_at", "committed_at", "manifest",
@@ -218,7 +218,7 @@ func TestRowForDatasetVersionKeys(t *testing.T) {
 }
 
 func TestRowForDeletedVersionKeys(t *testing.T) {
-	row := RowForDeletedVersion(datadrop.DeleteDatasetVersionResult{
+	row := RowForDeletedVersion(datalab.DeleteDatasetVersionResult{
 		Drop: "greenhouse", Dataset: "readings", Version: 3, Deleted: true,
 	})
 	assertKeys(t, "RowForDeletedVersion", row, []string{
@@ -230,7 +230,7 @@ func TestRowForDeletedVersionKeys(t *testing.T) {
 }
 
 func TestRowForImportResultKeys(t *testing.T) {
-	row := RowForImportResult(datadrop.ImportResult{Drop: "greenhouse", Appended: 2})
+	row := RowForImportResult(datalab.ImportResult{Drop: "greenhouse", Appended: 2})
 	assertKeys(t, "RowForImportResult", row, []string{
 		"drop", "dataset", "version", "path", "stream",
 		"rows", "appended", "skipped", "truncated", "warnings",
@@ -238,9 +238,9 @@ func TestRowForImportResultKeys(t *testing.T) {
 }
 
 func TestRowForImportResultUsesTotalWarningCount(t *testing.T) {
-	row := RowForImportResult(datadrop.ImportResult{
+	row := RowForImportResult(datalab.ImportResult{
 		WarningCount: 17,
-		Warnings:     []datadrop.Violation{{Path: "/sample", Message: "one sampled warning"}},
+		Warnings:     []datalab.Violation{{Path: "/sample", Message: "one sampled warning"}},
 	})
 	if got, _ := row.Get("warnings"); got != 17 {
 		t.Fatalf("warnings = %v, want total warning_count 17", got)
@@ -287,11 +287,11 @@ func TestRowForPrincipalAnonymousKeepsColumns(t *testing.T) {
 
 // Timestamps use the one canonical format the store, the CSV export and the
 // table projection already agree on. A second spelling here would make
-// `datadrop list --format csv` and `datadrop export --format csv` disagree
+// `datalab list --format csv` and `datalab export --format csv` disagree
 // about what a date looks like.
 func TestRowTimestampsAreCanonical(t *testing.T) {
 	instant := time.Date(2026, 7, 20, 9, 14, 2, 0, time.UTC)
-	row := RowForDrop(datadrop.Drop{Name: "greenhouse", CreatedAt: instant})
+	row := RowForDrop(datalab.Drop{Name: "greenhouse", CreatedAt: instant})
 
 	got, _ := row.Get("created_at")
 	if got != "2026-07-20T09:14:02.000Z" {
@@ -301,7 +301,7 @@ func TestRowTimestampsAreCanonical(t *testing.T) {
 
 // An absent optional timestamp is an empty cell, not the year 1.
 func TestOptionalTimestampsAreEmptyWhenAbsent(t *testing.T) {
-	row := RowForDropStats(datadrop.DropStats{Drop: datadrop.Drop{Name: "x"}})
+	row := RowForDropStats(datalab.DropStats{Drop: datalab.Drop{Name: "x"}})
 	if got, _ := row.Get("last_event"); got != "" {
 		t.Errorf("last_event = %q, want an empty cell", got)
 	}

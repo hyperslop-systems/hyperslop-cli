@@ -17,14 +17,14 @@ IsTopLevel: true
 ShowPerDefault: true
 ---
 
-The CLI never accepts a ZITADEL/OIDC access token as a datadrop data-plane
+The CLI never accepts a ZITADEL/OIDC access token as a datalab data-plane
 credential. Instead, an agent obtains a scoped, revocable local `ddp_` token
 through a browser-approved device pairing flow (RFC-8628-style).
 
 ## The ceremony
 
 ```
-agent (CLI)                 datadrop server                 human browser
+agent (CLI)                 datalab server                  human browser
    |  POST /v1/device/authorizations  ->|                        |
    |  <-- {device_code, user_code, url} |                        |
    |  print url + user_code to stderr   |                        |
@@ -44,12 +44,12 @@ export HYPERSLOP_TOKEN="$(hyperslop auth device --name 'local coding agent' --sc
 Or write an owner-only file and point the environment at it:
 
 ```bash
-hyperslop auth device --credential-file ~/.config/datadrop/agent.token
-export HYPERSLOP_TOKEN="$(cat ~/.config/datadrop/agent.token)"
+hyperslop auth device --credential-file ~/.config/hyperslop/agent.token
+export HYPERSLOP_TOKEN="$(cat ~/.config/hyperslop/agent.token)"
 ```
 
-(On the admin `datadrop` binary the variable is `DATADROP_TOKEN` and the command
-is `datadrop auth device`; the flow is identical.)
+(On the admin `datalab` binary the variable is `DATALAB_TOKEN` and the command
+is `datalab auth device`; the flow is identical.)
 
 ## Scopes
 

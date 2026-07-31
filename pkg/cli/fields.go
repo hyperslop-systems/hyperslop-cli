@@ -10,12 +10,12 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/pkg/errors"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // DropStreamFlag names the stream within a drop.
 //
-// The explicit name distinguishes the stream inside a Datadrop drop from
+// The explicit name distinguishes the stream inside a Datalab drop from
 // output serialization. Glazed v1.4 uses JSONL as its streaming contract and
 // no longer exposes a generic --stream flag, but the domain-specific spelling
 // remains clearer across the seven verbs that carry it.
@@ -25,7 +25,7 @@ const DropStreamFlag = "drop-stream"
 // stream rather than a whole time range.
 func DropStreamField() *fields.Definition {
 	return fields.New(DropStreamFlag, fields.TypeString,
-		fields.WithDefault(datadrop.DefaultStream),
+		fields.WithDefault(datalab.DefaultStream),
 		fields.WithHelp("stream within the drop (was --stream before v0.2)"))
 }
 

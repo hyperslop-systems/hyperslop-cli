@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // PutCommand registers a new schema version for a stream.
@@ -23,7 +23,7 @@ type PutCommand struct {
 
 var _ cmds.GlazeCommand = &PutCommand{}
 
-// NewPutCommand builds `datadrop schema put DROP`.
+// NewPutCommand builds `datalab schema put DROP`.
 func NewPutCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {
@@ -59,8 +59,8 @@ event.
 				fields.WithDefault(""),
 				fields.WithHelp(`path to the JSON Schema document, or "-" for stdin (required)`)),
 			fields.New("mode", fields.TypeChoice,
-				fields.WithChoices(string(datadrop.ModeStrict), string(datadrop.ModePermissive)),
-				fields.WithDefault(string(datadrop.ModeStrict)),
+				fields.WithChoices(string(datalab.ModeStrict), string(datalab.ModePermissive)),
+				fields.WithDefault(string(datalab.ModeStrict)),
 				fields.WithHelp("validation mode")),
 		),
 		cmds.WithSections(glazedSection, clientSection),
@@ -86,7 +86,7 @@ func (c *PutCommand) RunIntoGlazeProcessor(
 	if s.File == "" {
 		return errors.New(`--file is required (use "-" to read from stdin)`)
 	}
-	mode, err := datadrop.ParseMode(s.Mode)
+	mode, err := datalab.ParseMode(s.Mode)
 	if err != nil {
 		return err
 	}

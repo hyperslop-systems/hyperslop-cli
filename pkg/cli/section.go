@@ -15,12 +15,12 @@ import (
 //
 // It is a Glazed section rather than a pair of persistent cobra flags (DR-76)
 // for three reasons: a section can be filled from a config file or a named
-// profile without datadrop implementing precedence itself, --print-parsed-fields
+// profile without datalab implementing precedence itself, --print-parsed-fields
 // can then say where a value came from, and the flags appear only on the
-// commands that actually talk to a server. `datadrop serve` used to carry a
+// commands that actually talk to a server. `datalab serve` used to carry a
 // client --token it never read, purely because the flag was persistent on the
 // root.
-const ClientSectionSlug = "datadrop-client"
+const ClientSectionSlug = "datalab-client"
 
 // DefaultAddr is the server a client command talks to when nothing says
 // otherwise.
@@ -48,13 +48,13 @@ type ClientSettings struct {
 func NewClientSection() (schema.Section, error) {
 	section, err := schema.NewSection(
 		ClientSectionSlug,
-		"How to reach the datadrop server",
+		"How to reach the datalab server",
 		schema.WithFields(
 			fields.New(
 				"addr",
 				fields.TypeString,
 				fields.WithDefault(DefaultAddr),
-				fields.WithHelp("datadrop server base URL [$"+strings.ToUpper(AppName())+"_ADDR]"),
+				fields.WithHelp("datalab server base URL [$"+strings.ToUpper(AppName())+"_ADDR]"),
 			),
 			fields.New(
 				"token",
@@ -65,7 +65,7 @@ func NewClientSection() (schema.Section, error) {
 		),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "building the datadrop client section")
+		return nil, errors.Wrap(err, "building the datalab client section")
 	}
 	return section, nil
 }
@@ -78,7 +78,7 @@ func NewClientSection() (schema.Section, error) {
 func ClientFrom(vals *values.Values) (*client.Client, error) {
 	s := &ClientSettings{}
 	if err := vals.DecodeSectionInto(ClientSectionSlug, s); err != nil {
-		return nil, errors.Wrap(err, "decoding the datadrop client section")
+		return nil, errors.Wrap(err, "decoding the datalab client section")
 	}
 	return client.New(s.Addr, s.Token)
 }
@@ -88,7 +88,7 @@ func ClientFrom(vals *values.Values) (*client.Client, error) {
 func ClientSettingsFrom(vals *values.Values) (*ClientSettings, error) {
 	s := &ClientSettings{}
 	if err := vals.DecodeSectionInto(ClientSectionSlug, s); err != nil {
-		return nil, errors.Wrap(err, "decoding the datadrop client section")
+		return nil, errors.Wrap(err, "decoding the datalab client section")
 	}
 	return s, nil
 }

@@ -1,4 +1,4 @@
-package datadrop
+package datalab
 
 import "github.com/pkg/errors"
 
@@ -8,7 +8,7 @@ import "github.com/pkg/errors"
 // naming, sharing, and export" since v0.1: there is no per-dataset or
 // per-stream role.
 //
-// Like Scope, Role lives in the datadrop wire-types package because the wire
+// Like Scope, Role lives in the datalab wire-types package because the wire
 // types embed it (a Member carries a Role; a SetMemberRequest carries one). The
 // per-request authorization decision that turns a Role and a Scope into an
 // allow/deny (EffectiveRole, Authorize, DropACL) is server-only and stays with

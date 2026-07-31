@@ -1,11 +1,11 @@
-// Package datadrop holds the domain types shared by the store, the HTTP
+// Package datalab holds the domain types shared by the store, the HTTP
 // server, and the client: drops, event envelopes, schemas, queries, and audit
 // records.
 //
 // Keeping these in one leaf package (rather than in pkg/store) means the
 // client can speak the same vocabulary as the server without importing the
 // persistence layer.
-package datadrop
+package datalab
 
 import (
 	"encoding/json"
@@ -25,7 +25,9 @@ const (
 	DefaultStream = "events"
 
 	// DefaultType is the CloudEvents `type` assigned when a producer does not
-	// supply one.
+	// supply one. It keeps the pre-rename product name: the string is stored
+	// in every event appended without an explicit type and consumers route on
+	// it, so changing it would split the stream across an upgrade.
 	DefaultType = "io.datadrop.event"
 )
 
@@ -116,7 +118,7 @@ func NormalizeStream(stream string) string {
 }
 
 // TimeFormat is the canonical timestamp representation used everywhere in
-// datadrop: RFC3339, UTC, fixed-width millisecond precision.
+// datalab: RFC3339, UTC, fixed-width millisecond precision.
 //
 // The fixed width matters. time.RFC3339Nano strips trailing zeros, which would
 // make "…:05.100Z" and "…:05.1Z" different strings that compare incorrectly in

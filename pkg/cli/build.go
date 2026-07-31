@@ -9,7 +9,7 @@ import (
 )
 
 // appName is the env prefix the parser reads <APP>_* variables under (e.g.
-// HYPERSLOP_ADDR for the hyperslop binary, DATADROP_ADDR for the datadrop admin
+// HYPERSLOP_ADDR for the hyperslop binary, DATADROP_ADDR for the datalab admin
 // binary). Set it once per binary with SetAppName before building commands.
 //
 // It has to be set on the parser config of every command, because that is what
@@ -29,15 +29,15 @@ func AppName() string { return appName }
 type Builder func() (cmds.Command, error)
 
 // BuildCobraCommand turns a Glazed command into a cobra command with
-// datadrop's conventions applied.
+// datalab's conventions applied.
 //
 // Two of those conventions matter:
 //
 //   - WithExitCodes wraps the command so that every error it returns is mapped
-//     onto the documented exit codes and reported with the "datadrop: " prefix
+//     onto the documented exit codes and reported with the "datalab: " prefix
 //     before glazed's cobra.CheckErr can turn it into "Error: " and exit 1. See
 //     exit.go.
-//   - ShortHelpSections keeps `datadrop query --help` focused on the command's
+//   - ShortHelpSections keeps `datalab query --help` focused on the command's
 //     own fields and client connection fields; structured output remains
 //     available through its compact section.
 //
@@ -83,6 +83,6 @@ func AddCommands(parent *cobra.Command, builders ...Builder) error {
 // pkg/cli/events and so on — and those subpackages import this package for the
 // client section, the row projections and the exit helper. So the dependency
 // has to run one way only: this package must not import them back. NewRootCmd
-// therefore takes the registrars as arguments and cmd/datadrop/main.go names
+// therefore takes the registrars as arguments and cmd/datalab/main.go names
 // them, which is the one place in the tree that knows about every group.
 type Registrar func(root *cobra.Command) error

@@ -1,7 +1,7 @@
-// Package client is a typed HTTP client for the datadrop API.
+// Package client is a typed HTTP client for the datalab API.
 //
 // The CLI is built on this rather than reaching into SQLite directly, which is
-// what keeps the CLI honest: if `datadrop push` works, `curl` works, because
+// what keeps the CLI honest: if `datalab push` works, `curl` works, because
 // they exercise the same endpoints.
 package client
 
@@ -18,10 +18,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
-// Client talks to one datadrop server.
+// Client talks to one datalab server.
 type Client struct {
 	BaseURL string
 	Token   string
@@ -67,11 +67,11 @@ func New(baseURL, token string) (*Client, error) {
 
 // APIError is a problem document returned by the server.
 type APIError struct {
-	Status    int                  `json:"-"`
-	Code      string               `json:"code"`
-	Detail    string               `json:"detail"`
-	RequestID string               `json:"request_id,omitempty"`
-	Errors    []datadrop.Violation `json:"errors,omitempty"`
+	Status    int                 `json:"-"`
+	Code      string              `json:"code"`
+	Detail    string              `json:"detail"`
+	RequestID string              `json:"request_id,omitempty"`
+	Errors    []datalab.Violation `json:"errors,omitempty"`
 	// RetryAfter is parsed from the HTTP Retry-After header when present, e.g.
 	// on a device-token "RateLimited" response. Zero means the server gave no
 	// guidance.
@@ -97,24 +97,24 @@ func (e *APIError) Error() string {
 }
 
 // CreateDrop creates a drop.
-func (c *Client) CreateDrop(ctx context.Context, req datadrop.CreateDropRequest) (datadrop.Drop, error) {
-	var created datadrop.Drop
+func (c *Client) CreateDrop(ctx context.Context, req datalab.CreateDropRequest) (datalab.Drop, error) {
+	var created datalab.Drop
 	err := c.doJSON(ctx, http.MethodPost, "/v1/drops", nil, req, &created)
 	return created, err
 }
 
 // ListDrops returns every drop on the server.
-func (c *Client) ListDrops(ctx context.Context) ([]datadrop.Drop, error) {
+func (c *Client) ListDrops(ctx context.Context) ([]datalab.Drop, error) {
 	var response struct {
-		Drops []datadrop.Drop `json:"drops"`
+		Drops []datalab.Drop `json:"drops"`
 	}
 	err := c.doJSON(ctx, http.MethodGet, "/v1/drops", nil, nil, &response)
 	return response.Drops, err
 }
 
 // GetDrop returns a drop with its counters.
-func (c *Client) GetDrop(ctx context.Context, drop string) (datadrop.DropStats, error) {
-	var stats datadrop.DropStats
+func (c *Client) GetDrop(ctx context.Context, drop string) (datalab.DropStats, error) {
+	var stats datalab.DropStats
 	err := c.doJSON(ctx, http.MethodGet, "/v1/drops/"+url.PathEscape(drop), nil, nil, &stats)
 	return stats, err
 }
@@ -123,9 +123,9 @@ func (c *Client) GetDrop(ctx context.Context, drop string) (datadrop.DropStats, 
 // full CloudEvents envelope, discriminated by envelope.
 func (c *Client) Push(
 	ctx context.Context, drop, stream string, body json.RawMessage, envelope bool,
-) (datadrop.AppendResult, error) {
+) (datalab.AppendResult, error) {
 	query := url.Values{}
-	if stream != "" && stream != datadrop.DefaultStream {
+	if stream != "" && stream != datalab.DefaultStream {
 		query.Set("stream", stream)
 	}
 	// Be explicit about the shape rather than relying on the server's
@@ -139,13 +139,13 @@ func (c *Client) Push(
 	resp, err := c.do(ctx, http.MethodPost,
 		"/v1/drops/"+url.PathEscape(drop)+"/events", query, body)
 	if err != nil {
-		return datadrop.AppendResult{}, err
+		return datalab.AppendResult{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var result datadrop.AppendResult
+	var result datalab.AppendResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return datadrop.AppendResult{}, errors.Wrap(err, "client: decode append result")
+		return datalab.AppendResult{}, errors.Wrap(err, "client: decode append result")
 	}
 	// Duplicate is intentionally absent from JSON: the ingest wire contract
 	// distinguishes an idempotent replay (200) from a new append (201).
@@ -154,8 +154,8 @@ func (c *Client) Push(
 }
 
 // Query reads a window of a stream.
-func (c *Client) Query(ctx context.Context, q datadrop.EventQuery) (datadrop.QueryResult, error) {
-	var result datadrop.QueryResult
+func (c *Client) Query(ctx context.Context, q datalab.EventQuery) (datalab.QueryResult, error) {
+	var result datalab.QueryResult
 	err := c.doJSON(ctx, http.MethodGet,
 		"/v1/drops/"+url.PathEscape(q.Drop)+"/events", queryValues(q), nil, &result)
 	return result, err
@@ -163,14 +163,14 @@ func (c *Client) Query(ctx context.Context, q datadrop.EventQuery) (datadrop.Que
 
 // PutSchema registers a schema version.
 func (c *Client) PutSchema(
-	ctx context.Context, drop, stream string, spec json.RawMessage, mode datadrop.Mode,
-) (datadrop.PutSchemaResult, error) {
+	ctx context.Context, drop, stream string, spec json.RawMessage, mode datalab.Mode,
+) (datalab.PutSchemaResult, error) {
 	query := url.Values{}
 	if mode != "" {
 		query.Set("mode", string(mode))
 	}
 
-	var result datadrop.PutSchemaResult
+	var result datalab.PutSchemaResult
 	err := c.doJSON(ctx, http.MethodPut,
 		"/v1/drops/"+url.PathEscape(drop)+"/schemas/"+url.PathEscape(stream),
 		query, spec, &result)
@@ -178,8 +178,8 @@ func (c *Client) PutSchema(
 }
 
 // GetSchema returns the active schema for a stream.
-func (c *Client) GetSchema(ctx context.Context, drop, stream string) (datadrop.Schema, error) {
-	var sc datadrop.Schema
+func (c *Client) GetSchema(ctx context.Context, drop, stream string) (datalab.Schema, error) {
+	var sc datalab.Schema
 	err := c.doJSON(ctx, http.MethodGet,
 		"/v1/drops/"+url.PathEscape(drop)+"/schemas/"+url.PathEscape(stream), nil, nil, &sc)
 	return sc, err
@@ -188,7 +188,7 @@ func (c *Client) GetSchema(ctx context.Context, drop, stream string) (datadrop.S
 // Export streams an export in the requested format. The caller owns the
 // returned reader and must close it.
 func (c *Client) Export(
-	ctx context.Context, drop, format string, q datadrop.EventQuery,
+	ctx context.Context, drop, format string, q datalab.EventQuery,
 ) (io.ReadCloser, error) {
 	query := queryValues(q)
 	query.Set("format", format)
@@ -217,7 +217,7 @@ type StreamEvent struct {
 	// Name is the SSE event type: "append" or "reset".
 	Name string
 	// Envelope is populated for "append" frames.
-	Envelope datadrop.Envelope
+	Envelope datalab.Envelope
 	// Reset carries the server's cursor when the subscriber was evicted.
 	Reset struct {
 		Reason string `json:"reason"`
@@ -235,7 +235,7 @@ func (c *Client) Stream(
 	ctx context.Context, drop, stream string, after int64,
 ) (<-chan StreamEvent, <-chan error, error) {
 	query := url.Values{}
-	if stream != "" && stream != datadrop.DefaultStream {
+	if stream != "" && stream != datalab.DefaultStream {
 		query.Set("stream", stream)
 	}
 	if after > 0 {
@@ -347,10 +347,10 @@ func parseSSE(ctx context.Context, body io.Reader, frames chan<- StreamEvent) er
 
 // queryValues renders an EventQuery as URL parameters, omitting anything left
 // at its default so the request URL stays readable.
-func queryValues(q datadrop.EventQuery) url.Values {
+func queryValues(q datalab.EventQuery) url.Values {
 	values := url.Values{}
 
-	if q.Stream != "" && q.Stream != datadrop.DefaultStream {
+	if q.Stream != "" && q.Stream != datalab.DefaultStream {
 		values.Set("stream", q.Stream)
 	}
 	if q.Limit > 0 {
@@ -371,7 +371,7 @@ func queryValues(q datadrop.EventQuery) url.Values {
 	if q.Order != "" {
 		values.Set("order", string(q.Order))
 	}
-	if q.TimeField != "" && q.TimeField != datadrop.TimeFieldTime {
+	if q.TimeField != "" && q.TimeField != datalab.TimeFieldTime {
 		values.Set("time_field", string(q.TimeField))
 	}
 	return values
@@ -424,9 +424,9 @@ func (c *Client) do(
 // token, so the client sends no Authorization header (do() omits it when
 // Token is empty). On a non-2xx response it returns an *APIError.
 func (c *Client) StartDeviceAuthorization(
-	ctx context.Context, req datadrop.StartDeviceAuthorizationRequest,
-) (datadrop.StartDeviceAuthorizationResponse, error) {
-	var resp datadrop.StartDeviceAuthorizationResponse
+	ctx context.Context, req datalab.StartDeviceAuthorizationRequest,
+) (datalab.StartDeviceAuthorizationResponse, error) {
+	var resp datalab.StartDeviceAuthorizationResponse
 	err := c.doJSON(ctx, http.MethodPost, "/v1/device/authorizations", nil, req, &resp)
 	return resp, err
 }
@@ -440,9 +440,9 @@ func (c *Client) StartDeviceAuthorization(
 // knows the last state, and the only resume state a retry needs is "poll again
 // after interval".
 func (c *Client) PollDeviceToken(
-	ctx context.Context, req datadrop.PollDeviceTokenRequest,
-) (datadrop.DeviceTokenResponse, error) {
-	var resp datadrop.DeviceTokenResponse
+	ctx context.Context, req datalab.PollDeviceTokenRequest,
+) (datalab.DeviceTokenResponse, error) {
+	var resp datalab.DeviceTokenResponse
 	err := c.doJSON(ctx, http.MethodPost, "/v1/device/tokens", nil, req, &resp)
 	return resp, err
 }

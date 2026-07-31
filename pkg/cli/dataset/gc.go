@@ -23,7 +23,7 @@ type GCCommand struct {
 
 var _ cmds.GlazeCommand = &GCCommand{}
 
-// NewGCCommand builds `datadrop dataset gc`.
+// NewGCCommand builds `datalab dataset gc`.
 func NewGCCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {

@@ -9,8 +9,8 @@
 // fields.
 //
 // The proprietary server's own documentation (the web workbench it hosts, the
-// ZITADEL dev stack) lives in go-go-datadrop/pkg/doc. The admin datadrop binary
-// loads both help sets so `datadrop help cli-output` still resolves.
+// ZITADEL dev stack) lives in go-go-datalab/pkg/doc. The admin datalab binary
+// loads both help sets so `datalab help cli-output` still resolves.
 package doc
 
 import (

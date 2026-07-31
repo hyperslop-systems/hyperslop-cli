@@ -17,7 +17,7 @@ import (
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // tailDefaultLimit is how much recent history a tail shows before following.
@@ -30,7 +30,7 @@ type TailCommand struct {
 
 var _ cmds.GlazeCommand = &TailCommand{}
 
-// NewTailCommand builds `datadrop tail DROP`.
+// NewTailCommand builds `datalab tail DROP`.
 //
 // Glazed v1.4 has one explicit streaming wire format: JSONL. Defaulting tail
 // to it ensures each event is flushed as one complete object, including when
@@ -174,8 +174,8 @@ func (s *tailSettings) validateFollow(format settings.OutputFormat) error {
 // cursor/order combinations. Setting it afterwards could turn a valid
 // after+ascending request into an invalid after+descending request sent to the
 // server. Tail is intrinsically newest-first; the page is reversed for output.
-func (s *tailSettings) tailQuery() (datadrop.EventQuery, error) {
-	s.Order = string(datadrop.OrderDesc)
+func (s *tailSettings) tailQuery() (datalab.EventQuery, error) {
+	s.Order = string(datalab.OrderDesc)
 	return s.query(s.Drop)
 }
 
@@ -326,8 +326,8 @@ func nextReconnectDelay(current time.Duration) time.Duration {
 	return current * 2
 }
 
-func reverse(events []datadrop.Envelope) []datadrop.Envelope {
-	reversed := make([]datadrop.Envelope, len(events))
+func reverse(events []datalab.Envelope) []datalab.Envelope {
+	reversed := make([]datalab.Envelope, len(events))
 	for i, e := range events {
 		reversed[len(events)-1-i] = e
 	}

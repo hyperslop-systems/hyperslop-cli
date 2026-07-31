@@ -21,7 +21,7 @@ type ShowCommand struct {
 
 var _ cmds.GlazeCommand = &ShowCommand{}
 
-// NewShowCommand builds `datadrop schema show DROP`.
+// NewShowCommand builds `datalab schema show DROP`.
 func NewShowCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {

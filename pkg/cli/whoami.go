@@ -27,7 +27,7 @@ type WhoamiCommand struct {
 
 var _ cmds.GlazeCommand = &WhoamiCommand{}
 
-// NewWhoamiCommand builds `datadrop whoami`.
+// NewWhoamiCommand builds `datalab whoami`.
 func NewWhoamiCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // PropType is the part of a JSON Schema property this package interprets.
@@ -175,10 +175,10 @@ func isInstant(s string) bool {
 	if _, err := time.Parse(time.RFC3339, s); err == nil {
 		return true
 	}
-	// The canonical datadrop rendering is RFC3339 with fixed millisecond width,
+	// The canonical datalab rendering is RFC3339 with fixed millisecond width,
 	// which time.RFC3339 already accepts; this second attempt covers a
 	// date-only value, which it does not.
-	if _, err := time.Parse(datadrop.TimeFormat, s); err == nil {
+	if _, err := time.Parse(datalab.TimeFormat, s); err == nil {
 		return true
 	}
 	_, err := time.Parse("2006-01-02", s)

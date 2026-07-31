@@ -2,7 +2,7 @@
 // list, inspect and push.
 //
 // The package groups them in the source without grouping them in the CLI —
-// they stay top-level verbs, `datadrop list` rather than `datadrop drops list`,
+// they stay top-level verbs, `datalab list` rather than `datalab drops list`,
 // because that is the existing surface and this is not a renaming ticket
 // (DR-82).
 package drops

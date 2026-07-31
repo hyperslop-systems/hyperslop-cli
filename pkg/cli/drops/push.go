@@ -19,7 +19,7 @@ import (
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/jsondoc"
 )
 
@@ -30,7 +30,7 @@ type PushCommand struct {
 
 var _ cmds.GlazeCommand = &PushCommand{}
 
-// NewPushCommand builds `datadrop push DROP [key=value ...]`.
+// NewPushCommand builds `datalab push DROP [key=value ...]`.
 //
 // The variadic tail is a fields.TypeStringList argument and must be the last
 // one declared; only one list argument is allowed.
@@ -75,7 +75,7 @@ allocated:
 		),
 		cmds.WithFlags(
 			fields.New(ddcli.DropStreamFlag, fields.TypeString,
-				fields.WithDefault(datadrop.DefaultStream),
+				fields.WithDefault(datalab.DefaultStream),
 				fields.WithHelp("stream within the drop (was --stream before v0.2)")),
 			fields.New("stdin", fields.TypeBool,
 				fields.WithDefault(false),
@@ -91,7 +91,7 @@ allocated:
 				fields.WithHelp("CloudEvents source, e.g. device:sensor-7")),
 			fields.New("type", fields.TypeString,
 				fields.WithDefault(""),
-				fields.WithHelp("CloudEvents type, e.g. io.datadrop.reading.v1")),
+				fields.WithHelp("CloudEvents type, e.g. io.datalab.reading.v1")),
 			fields.New("subject", fields.TypeString,
 				fields.WithDefault(""),
 				fields.WithHelp("CloudEvents subject, e.g. greenhouse/zone-a")),
@@ -178,7 +178,7 @@ func (o envelopeOverrides) wrap(payload json.RawMessage) (json.RawMessage, bool,
 	}
 
 	envelope := map[string]any{
-		"specversion": datadrop.SpecVersion,
+		"specversion": datalab.SpecVersion,
 		"data":        payload,
 	}
 	if o.source != "" {

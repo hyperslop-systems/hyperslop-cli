@@ -15,7 +15,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/client"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func TestTailFollowRejectsRangeFiltersItCannotPreserve(t *testing.T) {
@@ -59,7 +59,7 @@ func TestTailQueryForcesDescendingOrderBeforeCursorValidation(t *testing.T) {
 		s := &tailSettings{
 			Drop: "greenhouse",
 			rangeSettings: rangeSettings{
-				After: 10, Order: string(datadrop.OrderAsc), Limit: tailDefaultLimit,
+				After: 10, Order: string(datalab.OrderAsc), Limit: tailDefaultLimit,
 			},
 		}
 		if _, err := s.tailQuery(); err == nil {
@@ -71,14 +71,14 @@ func TestTailQueryForcesDescendingOrderBeforeCursorValidation(t *testing.T) {
 		s := &tailSettings{
 			Drop: "greenhouse",
 			rangeSettings: rangeSettings{
-				Before: 10, Order: string(datadrop.OrderAsc), Limit: tailDefaultLimit,
+				Before: 10, Order: string(datalab.OrderAsc), Limit: tailDefaultLimit,
 			},
 		}
 		q, err := s.tailQuery()
 		if err != nil {
 			t.Fatalf("tailQuery: %v", err)
 		}
-		if q.Order != datadrop.OrderDesc || q.Before != 10 {
+		if q.Order != datalab.OrderDesc || q.Before != 10 {
 			t.Fatalf("query = %+v, want descending before=10", q)
 		}
 	})
@@ -118,7 +118,7 @@ func TestFollowStreamReconnectsAfterCleanEOFWithCursor(t *testing.T) {
 		t.Fatalf("client.New: %v", err)
 	}
 	var waits []time.Duration
-	err = followStreamWithWait(ctx, nil, api, "greenhouse", datadrop.DefaultStream, 7,
+	err = followStreamWithWait(ctx, nil, api, "greenhouse", datalab.DefaultStream, 7,
 		func(_ context.Context, delay time.Duration) error {
 			waits = append(waits, delay)
 			return nil
@@ -168,7 +168,7 @@ func TestFollowStreamReconnectsAfterTransientReadError(t *testing.T) {
 	})}
 
 	var waits []time.Duration
-	err = followStreamWithWait(ctx, nil, api, "greenhouse", datadrop.DefaultStream, 9,
+	err = followStreamWithWait(ctx, nil, api, "greenhouse", datalab.DefaultStream, 9,
 		func(_ context.Context, delay time.Duration) error {
 			waits = append(waits, delay)
 			return nil

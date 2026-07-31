@@ -1,8 +1,8 @@
 # Hyperslop CLI
 
-`hyperslop` is the customer and agent CLI for a [Datadrop](https://github.com/go-go-golems/go-go-datadrop) server. It creates and queries event drops, tails SSE streams, manages JSON Schema, and publishes or retrieves immutable datasets.
+`hyperslop` is the customer and agent CLI for a [Datalab](https://github.com/hyperslop-systems/datalab) server. It creates and queries event drops, tails SSE streams, manages JSON Schema, and publishes or retrieves immutable datasets.
 
-Hyperslop talks to Datadrop through its public HTTP and SSE API. Point it at any Datadrop server for which you have a scoped Datadrop token.
+Hyperslop talks to Datalab through its public HTTP and SSE API. Point it at any Datalab server for which you have a scoped Datalab token.
 
 ## Install
 
@@ -28,15 +28,15 @@ GOWORK=off go build -o ./bin/hyperslop ./cmd/hyperslop
 
 ## Quick exercise against a real local server
 
-This exercise uses an actual Datadrop server, SQLite database, content-addressed blob store, and local ZITADEL identity provider. It is not a mocked HTTP service. You need Go, Docker, [devctl](https://github.com/go-go-golems/devctl), and a browser for device approval.
+This exercise uses an actual Datalab server, SQLite database, content-addressed blob store, and local ZITADEL identity provider. It is not a mocked HTTP service. You need Go, Docker, [devctl](https://github.com/go-go-golems/devctl), and a browser for device approval.
 
-### 1. Start Datadrop and its local identity provider
+### 1. Start Datalab and its local identity provider
 
-In a separate checkout of `go-go-datadrop`:
+In a separate checkout of `datalab`:
 
 ```bash
-git clone https://github.com/go-go-golems/go-go-datadrop.git
-cd go-go-datadrop
+git clone https://github.com/hyperslop-systems/datalab.git
+cd datalab
 
 devctl up
 # Wait until devctl reports:
@@ -46,7 +46,7 @@ devctl up
 
 `devctl up` starts the host-development ZITADEL stack and runs the real Go server on port 8080. Leave it running while you use the CLI. Its persistent development database and credentials are local ignored files; it does not contact a shared production service.
 
-If you prefer to supervise the pieces yourself, use the server repository's documented `make zitadel-up`, `make zitadel-env`, and `go run ./cmd/datadrop serve ...` flow. Do not start `datadrop serve` without its OIDC issuer, client credentials, external URL, and device-code pepper: the server intentionally fails closed on incomplete authentication configuration.
+If you prefer to supervise the pieces yourself, use the server repository's documented `make zitadel-up`, `make zitadel-env`, and `go run ./cmd/datalab serve ...` flow. Do not start `datalab serve` without its OIDC issuer, client credentials, external URL, and device-code pepper: the server intentionally fails closed on incomplete authentication configuration.
 
 ### 2. Pair the CLI in a browser
 
@@ -61,9 +61,9 @@ export HYPERSLOP_TOKEN="$(hyperslop auth device \
   --expires-in 24h)"
 ```
 
-The command prints a verification URL and short code to **stderr**. Open that URL, sign in to the local ZITADEL instance, approve the code, and return to the terminal. The one-time Datadrop token is emitted only on stdout and becomes `HYPERSLOP_TOKEN` through command substitution.
+The command prints a verification URL and short code to **stderr**. Open that URL, sign in to the local ZITADEL instance, approve the code, and return to the terminal. The one-time Datalab token is emitted only on stdout and becomes `HYPERSLOP_TOKEN` through command substitution.
 
-Use the Datadrop development-stack documentation if you need help signing in to the local identity provider. Never place an upstream OIDC bearer token in `HYPERSLOP_TOKEN`.
+Use the Datalab development-stack documentation if you need help signing in to the local identity provider. Never place an upstream OIDC bearer token in `HYPERSLOP_TOKEN`.
 
 ### 3. Create, write, query, tail, and export a real drop
 
@@ -124,7 +124,7 @@ Dataset downloads verify SHA-256 digests by default. A whole-version download st
 
 ```bash
 unset HYPERSLOP_TOKEN
-# In the go-go-datadrop checkout:
+# In the datalab checkout:
 devctl down
 ```
 
@@ -145,11 +145,11 @@ Every row-producing command supports `--format table|json|jsonl|csv|tsv|yaml` an
 
 | Environment variable | Meaning |
 |---|---|
-| `HYPERSLOP_ADDR` | Datadrop server base URL. Defaults to `http://localhost:8080`. |
-| `HYPERSLOP_TOKEN` | Scoped Datadrop `ddp_` bearer token. |
+| `HYPERSLOP_ADDR` | Datalab server base URL. Defaults to `http://localhost:8080`. |
+| `HYPERSLOP_TOKEN` | Scoped Datalab `ddp_` bearer token. |
 | `HYPERSLOP_LOG_LEVEL` | Client log verbosity. |
 
-Flags override environment variables. Never use an upstream OIDC access token as `HYPERSLOP_TOKEN`; use `hyperslop auth device` to mint a scoped Datadrop token.
+Flags override environment variables. Never use an upstream OIDC access token as `HYPERSLOP_TOKEN`; use `hyperslop auth device` to mint a scoped Datalab token.
 
 ## Script contracts
 
@@ -171,7 +171,7 @@ hyperslop query greenhouse --format jsonl > events.jsonl
 code=$?
 if [ "$code" -ne 0 ]; then
   case "$code" in
-    3) echo 'refresh or re-authorize the Datadrop token' >&2 ;;
+    3) echo 'refresh or re-authorize the Datalab token' >&2 ;;
     4) echo 'the drop does not exist' >&2 ;;
     *) echo 'query failed' >&2 ;;
   esac
@@ -186,11 +186,11 @@ GOWORK=off go vet ./...
 GOWORK=off golangci-lint run ./...
 make logcopter-check
 
-# In the split workspace, runs the compiled CLI against the actual Datadrop server.
+# In the split workspace, runs the compiled CLI against the actual Datalab server.
 go test ./cmd/hyperslop -run TestHyperslop -count=1 -v
 ```
 
-The final command requires the sibling `go-go-datadrop` module from the split workspace. Under standalone `GOWORK=off` mode, only server-dependent acceptance tests skip; unit, client, parser, and command tests still run.
+The final command requires the sibling `datalab` module from the split workspace. Under standalone `GOWORK=off` mode, only server-dependent acceptance tests skip; unit, client, parser, and command tests still run.
 
 ## Release signature verification
 

@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	ddcli "github.com/hyperslop-systems/hyperslop-cli/pkg/cli"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 // ImportCommand materializes a dataset file's rows into an event stream.
@@ -25,7 +25,7 @@ type ImportCommand struct {
 
 var _ cmds.GlazeCommand = &ImportCommand{}
 
-// NewImportCommand builds `datadrop dataset import DROP DATASET`.
+// NewImportCommand builds `datalab dataset import DROP DATASET`.
 func NewImportCommand() (cmds.Command, error) {
 	glazedSection, err := settings.NewStructuredOutputSection()
 	if err != nil {
@@ -112,7 +112,7 @@ func (c *ImportCommand) RunIntoGlazeProcessor(
 		return errors.New("--path is required: name the file within the dataset")
 	}
 	if s.Version == "" {
-		s.Version = datadrop.LatestVersion
+		s.Version = datalab.LatestVersion
 	}
 
 	api, err := ddcli.ClientFrom(vals)

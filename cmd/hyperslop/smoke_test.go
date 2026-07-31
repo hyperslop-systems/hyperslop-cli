@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// This is the hyperslop acceptance test. It builds the REAL datadrop server
-// (from the go-go-datadrop worktree in the split-cli workspace) and the real
+// This is the hyperslop acceptance test. It builds the REAL datalab server
+// (from the datalab worktree in the split-cli workspace) and the real
 // hyperslop client, starts the server with a mock OIDC discovery provider, and
 // drives the hyperslop binary against it over a real socket — including the
 // full authenticated data path (create/push/query/tail/export/schema/dataset/
@@ -27,16 +27,16 @@ import (
 // the "hyperslop: " diagnostic prefix — the parts of the CLI contract an
 // in-process test cannot see.
 //
-// The server-dependent tests skip only when the go-go-datadrop companion
+// The server-dependent tests skip only when the datalab companion
 // module is genuinely absent (standalone GOWORK=off CI). Once the workspace
 // resolves that module, server build and token seeding failures are regressions
 // and fail the test rather than silently converting broken integration to skip.
 
-// seederSrc is a tiny main that opens the datadrop SQLite store, creates a
+// seederSrc is a tiny main that opens the datalab SQLite store, creates a
 // local user-owned ddp_ token (all scopes), and prints it. It is compiled and
 // run with `go run` against the split-cli workspace so it can import
-// go-go-datadrop/pkg/store — which hyperslop-cli itself must never import (that
-// would be a cycle). It mirrors go-go-datadrop's cmd/datadrop seedSmokeToken.
+// datalab/pkg/store — which hyperslop-cli itself must never import (that
+// would be a cycle). It mirrors datalab's cmd/datalab seedSmokeToken.
 const seederSrc = `package main
 
 import (
@@ -45,8 +45,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-go-golems/go-go-datadrop/pkg/store"
-	"github.com/hyperslop-systems/hyperslop-cli/pkg/datadrop"
+	"github.com/hyperslop-systems/datalab/pkg/store"
+	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
 func main() {
@@ -64,7 +64,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "upsert:", err)
 		os.Exit(1)
 	}
-	created, err := st.CreateAPIToken(context.Background(), user.ID, "smoke", datadrop.AllScopes, nil)
+	created, err := st.CreateAPIToken(context.Background(), user.ID, "smoke", datalab.AllScopes, nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "createtoken:", err)
 		os.Exit(1)
@@ -88,29 +88,29 @@ func buildHyperslopClient(t *testing.T) string {
 	return binary
 }
 
-// requireDatadropCompanion distinguishes a genuinely standalone checkout from
+// requireDatalabCompanion distinguishes a genuinely standalone checkout from
 // a broken companion module. go list -m only resolves module availability; it
 // does not compile packages, so a subsequent build error cannot be masked.
-func requireDatadropCompanion(t *testing.T) {
+func requireDatalabCompanion(t *testing.T) {
 	t.Helper()
-	list := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/go-go-golems/go-go-datadrop")
+	list := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/hyperslop-systems/datalab")
 	out, err := list.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) == "" {
-		t.Skipf("go-go-datadrop companion module is not available (standalone test mode): %v", err)
+		t.Skipf("datalab companion module is not available (standalone test mode): %v", err)
 	}
 }
 
-// buildDatadropServer compiles the datadrop server from the resolved workspace
+// buildDatalabServer compiles the datalab server from the resolved workspace
 // companion. Availability was checked separately, so compilation failure is a
 // real integration regression.
-func buildDatadropServer(t *testing.T) string {
+func buildDatalabServer(t *testing.T) string {
 	t.Helper()
-	requireDatadropCompanion(t)
-	binary := filepath.Join(t.TempDir(), "datadrop-server")
-	build := exec.Command("go", "build", "-o", binary, "github.com/go-go-golems/go-go-datadrop/cmd/datadrop")
+	requireDatalabCompanion(t)
+	binary := filepath.Join(t.TempDir(), "datalab-server")
+	build := exec.Command("go", "build", "-o", binary, "github.com/hyperslop-systems/datalab/cmd/datalab")
 	build.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build resolved datadrop server companion: %v\n%s", err, out)
+		t.Fatalf("build resolved datalab server companion: %v\n%s", err, out)
 	}
 	return binary
 }
@@ -120,7 +120,7 @@ func buildDatadropServer(t *testing.T) string {
 // Fails when the already-resolved companion's seeder no longer compiles or runs.
 func seedToken(t *testing.T, dbPath string) string {
 	t.Helper()
-	requireDatadropCompanion(t)
+	requireDatalabCompanion(t)
 	seeder := filepath.Join(t.TempDir(), "seeder_main.go")
 	if err := os.WriteFile(seeder, []byte(seederSrc), 0o600); err != nil {
 		t.Fatalf("write seeder: %v", err)
@@ -131,7 +131,7 @@ func seedToken(t *testing.T, dbPath string) string {
 	cmd.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("seed token with resolved go-go-datadrop companion: %v\n%s", err, out)
+		t.Fatalf("seed token with resolved datalab companion: %v\n%s", err, out)
 	}
 	token := strings.TrimSpace(string(out))
 	if !strings.HasPrefix(token, "ddp_") {
@@ -175,7 +175,7 @@ func freePort(t *testing.T) string {
 	return port
 }
 
-// startServer starts the datadrop server against dbPath (and optional blobDir)
+// startServer starts the datalab server against dbPath (and optional blobDir)
 // and blocks until /healthz answers 200.
 func startServer(t *testing.T, binary, issuer, dbPath, blobDir string) string {
 	t.Helper()
@@ -280,10 +280,10 @@ func writeFile(t *testing.T, path, content string) {
 // TestHyperslopWhoamiAgainstRealServer: anonymous whoami against the real
 // server -> exit 0, authenticated=false (no token presented).
 func TestHyperslopWhoamiAgainstRealServer(t *testing.T) {
-	server := buildDatadropServer(t)
+	server := buildDatalabServer(t)
 	client := buildHyperslopClient(t)
 	issuer := mockOIDCProvider(t)
-	base := startServer(t, server, issuer, filepath.Join(t.TempDir(), "datadrop.db"), "")
+	base := startServer(t, server, issuer, filepath.Join(t.TempDir(), "datalab.db"), "")
 
 	out, _, exit := runCLI(t, client, nil, "--addr", base, "whoami", "--format", "json", "--output-fields", "authenticated")
 	if exit != 0 {
@@ -299,10 +299,10 @@ func TestHyperslopWhoamiAgainstRealServer(t *testing.T) {
 // hits the real /v1/device/authorizations, prints the approval URL + code, and
 // exits non-zero when no approval arrives before timeout.
 func TestHyperslopAuthDeviceStartsAgainstRealServer(t *testing.T) {
-	server := buildDatadropServer(t)
+	server := buildDatalabServer(t)
 	client := buildHyperslopClient(t)
 	issuer := mockOIDCProvider(t)
-	base := startServer(t, server, issuer, filepath.Join(t.TempDir(), "datadrop.db"), "")
+	base := startServer(t, server, issuer, filepath.Join(t.TempDir(), "datalab.db"), "")
 
 	_, stderr, exit := runCLI(t, client, nil, "--addr", base, "auth", "device", "--name", "smoke agent", "--scopes", "drops:read", "--timeout", "1s")
 	if exit == 0 {
@@ -344,17 +344,17 @@ func TestHyperslopExitCodeOnUnreachableServer(t *testing.T) {
 
 // TestHyperslopFullDataPathAgainstRealServer runs the README quick start
 // (create/push/query/tail/export/schema/dataset/whoami) through the hyperslop
-// binary against a real datadrop server, with a seeded HYPERSLOP_TOKEN.
+// binary against a real datalab server, with a seeded HYPERSLOP_TOKEN.
 func TestHyperslopFullDataPathAgainstRealServer(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping end-to-end smoke test in -short mode")
 	}
-	server := buildDatadropServer(t)
+	server := buildDatalabServer(t)
 	client := buildHyperslopClient(t)
 	issuer := mockOIDCProvider(t)
 
 	workDir := t.TempDir()
-	dbPath := filepath.Join(workDir, "datadrop.db")
+	dbPath := filepath.Join(workDir, "datalab.db")
 	blobDir := filepath.Join(workDir, "blobs")
 	token := seedToken(t, dbPath) // before the server opens the DB
 	base := startServer(t, server, issuer, dbPath, blobDir)
@@ -473,11 +473,11 @@ func TestHyperslopExitCodeContract(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping end-to-end smoke test in -short mode")
 	}
-	server := buildDatadropServer(t)
+	server := buildDatalabServer(t)
 	client := buildHyperslopClient(t)
 	issuer := mockOIDCProvider(t)
 	workDir := t.TempDir()
-	dbPath := filepath.Join(workDir, "datadrop.db")
+	dbPath := filepath.Join(workDir, "datalab.db")
 	token := seedToken(t, dbPath)
 	base := startServer(t, server, issuer, dbPath, "")
 
