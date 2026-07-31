@@ -1180,3 +1180,40 @@ The changes are deliberately staged rather than applied. The GitHub App registra
 - Profile: `hyperslop-homebrew-fury-gpg`.
 - Planned paths: `kv/ci/github/hyperslop-systems/homebrew-publisher-app`, `kv/ci/release/hyperslop-systems/fury`, and `kv/ci/release/hyperslop-systems/gpg-signing`.
 - App bootstrap evidence only: App ID `4439947`, installation `150181944`, Vault record version `1`; no secret value was read or recorded.
+
+## Step 17: The rename-PR reviews — wire strings revert, the cycle guard finally points at the right module
+
+The Codex reviews of the datalab-rename pair (hyperslop-cli PR #4, datalab PR #13) all reduced to one rule the PRs themselves had stated: identifiers that live in stored data or a published contract keep the datadrop name. Fixed in hyperslop-cli 195f66d and datalab fe72495; every review thread answered inline.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address https://github.com/hyperslop-systems/datalab/pull/13 in ./datalab/" / "And also these comments https://github.com/hyperslop-systems/hyperslop-cli/pull/4"
+
+**Assistant interpretation:** Verify each finding, revert the wire/persisted strings the mechanical sed should have skipped, fix the guard/doc findings properly, push, and repin.
+
+**Inferred user intent:** The rename must not strand existing deployments' data.
+
+**Commit (code):** hyperslop-cli 195f66d, datalab fe72495
+
+### What I did
+- hyperslop-cli: `DefaultType` reverted to `io.datadrop.event` (stored on every default-typed event; consumers route on it). The getting-a-token topic now names the renamed admin binary (`datalab`, `DATALAB_TOKEN`). The no-cycle guard and the smoke tests' companion lookup pointed at `github.com/go-go-golems/go-go-data{drop,lab}` while the server module has been `github.com/hyperslop-systems/datalab` all along — the guard could never fire and the workspace smoke tests always skipped; both now use the real module path.
+- datalab: `datadrop.gog.document` restored (the shipped UI and every stored workbench document carry it), `io.datadrop.dataset.row.v1` restored (compared by `sameEventRequest`; the rename turned resumed imports into ErrConflict), the serve `--db` default back to `./datadrop.db` (Docker/compose pin `/data/datadrop.db`), and the live-OIDC test defaults back to the `datadrop-*` filenames provision.sh writes. go.mod repins hyperslop-cli at 195f66d.
+
+### Why
+- The PR bodies had already articulated the rule (ddp_ prefix, fixture event type); these four strings were misses of the same rule inside the mechanical sweep.
+
+### What worked
+- `GOWORK=off go test ./...` green in both repos, including datalab's 24s smoke suite after the repin.
+
+### What didn't work
+- Mid-remediation the datalab worktree turned up an in-progress merge of origin/main (PRs #14/#15) started by a concurrent session; waited it out rather than touching the worktree, then applied the fixes on top of the merge commit a4eb14d.
+
+### What I learned
+- The smoke-test module reference was ALREADY stale on main (go-go-datadrop vs hyperslop-systems/datalab), so the sed renamed a dead string into a different dead string — a reviewer bot caught what the always-skipping test could not.
+
+### What warrants a second pair of eyes
+- With the guard now live, confirm CI's standalone job still resolves `go list -deps` cleanly; and merge order still matters: hyperslop-cli PR #4 before datalab PR #13.
+
+### Code review instructions
+- hyperslop-cli: `pkg/datalab/event.go`, `.github/workflows/push.yml`, `cmd/hyperslop/smoke_test.go`, `pkg/doc/topics/02-getting-a-token.md`.
+- datalab: `pkg/workbenchapp/documents.go`, `pkg/server/handlers_import.go`, `pkg/cli/serve.go`, `pkg/auth/oidc_live_test.go`, the go.mod pin.
