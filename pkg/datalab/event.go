@@ -25,8 +25,10 @@ const (
 	DefaultStream = "events"
 
 	// DefaultType is the CloudEvents `type` assigned when a producer does not
-	// supply one.
-	DefaultType = "io.datalab.event"
+	// supply one. It keeps the pre-rename product name: the string is stored
+	// in every event appended without an explicit type and consumers route on
+	// it, so changing it would split the stream across an upgrade.
+	DefaultType = "io.datadrop.event"
 )
 
 // Envelope is one event: the CloudEvents-compatible metadata wrapper plus the

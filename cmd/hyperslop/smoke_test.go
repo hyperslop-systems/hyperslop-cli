@@ -16,7 +16,7 @@ import (
 )
 
 // This is the hyperslop acceptance test. It builds the REAL datalab server
-// (from the go-go-datalab worktree in the split-cli workspace) and the real
+// (from the datalab worktree in the split-cli workspace) and the real
 // hyperslop client, starts the server with a mock OIDC discovery provider, and
 // drives the hyperslop binary against it over a real socket — including the
 // full authenticated data path (create/push/query/tail/export/schema/dataset/
@@ -27,7 +27,7 @@ import (
 // the "hyperslop: " diagnostic prefix — the parts of the CLI contract an
 // in-process test cannot see.
 //
-// The server-dependent tests skip only when the go-go-datalab companion
+// The server-dependent tests skip only when the datalab companion
 // module is genuinely absent (standalone GOWORK=off CI). Once the workspace
 // resolves that module, server build and token seeding failures are regressions
 // and fail the test rather than silently converting broken integration to skip.
@@ -35,8 +35,8 @@ import (
 // seederSrc is a tiny main that opens the datalab SQLite store, creates a
 // local user-owned ddp_ token (all scopes), and prints it. It is compiled and
 // run with `go run` against the split-cli workspace so it can import
-// go-go-datalab/pkg/store — which hyperslop-cli itself must never import (that
-// would be a cycle). It mirrors go-go-datalab's cmd/datalab seedSmokeToken.
+// datalab/pkg/store — which hyperslop-cli itself must never import (that
+// would be a cycle). It mirrors datalab's cmd/datalab seedSmokeToken.
 const seederSrc = `package main
 
 import (
@@ -45,7 +45,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-go-golems/go-go-datalab/pkg/store"
+	"github.com/hyperslop-systems/datalab/pkg/store"
 	"github.com/hyperslop-systems/hyperslop-cli/pkg/datalab"
 )
 
@@ -93,10 +93,10 @@ func buildHyperslopClient(t *testing.T) string {
 // does not compile packages, so a subsequent build error cannot be masked.
 func requireDatalabCompanion(t *testing.T) {
 	t.Helper()
-	list := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/go-go-golems/go-go-datalab")
+	list := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/hyperslop-systems/datalab")
 	out, err := list.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) == "" {
-		t.Skipf("go-go-datalab companion module is not available (standalone test mode): %v", err)
+		t.Skipf("datalab companion module is not available (standalone test mode): %v", err)
 	}
 }
 
@@ -107,7 +107,7 @@ func buildDatalabServer(t *testing.T) string {
 	t.Helper()
 	requireDatalabCompanion(t)
 	binary := filepath.Join(t.TempDir(), "datalab-server")
-	build := exec.Command("go", "build", "-o", binary, "github.com/go-go-golems/go-go-datalab/cmd/datalab")
+	build := exec.Command("go", "build", "-o", binary, "github.com/hyperslop-systems/datalab/cmd/datalab")
 	build.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build resolved datalab server companion: %v\n%s", err, out)
@@ -131,7 +131,7 @@ func seedToken(t *testing.T, dbPath string) string {
 	cmd.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("seed token with resolved go-go-datalab companion: %v\n%s", err, out)
+		t.Fatalf("seed token with resolved datalab companion: %v\n%s", err, out)
 	}
 	token := strings.TrimSpace(string(out))
 	if !strings.HasPrefix(token, "ddp_") {
